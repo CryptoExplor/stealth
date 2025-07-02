@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Union Bridge Automation by Zun</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Base styles from original zun-union.txt */
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #10b981;
+            --background-color: #f0f4f8;
+            --card-background: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --border-color: #cbd5e1;
+            --console-bg: #1e293b;
+            --console-text: #4ade80;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Lexend', sans-serif;
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align to top for better content flow */
+            min-height: 100vh;
+            padding: 2rem;
+            overflow-y: auto; /* Allow scrolling */
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            width: 100%;
+            max-width: 1200px; /* Increased max-width */
+        }
+
+        .card {
+            background-color: var(--card-background);
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            color: var(--text-primary);
+            background-color: var(--background-color);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-grow: 1; /* Allow buttons to grow */
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+        }
+
+        .btn-secondary:hover {
+            background-color: #059669;
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+        }
+
+        .btn-outline:hover {
+            background-color: rgba(37, 99, 235, 0.1);
+        }
+
+        .btn-danger {
+            background-color: #ef4444;
+            color: white;
+            border: none;
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+
+        .console-output {
+            background-color: var(--console-bg);
+            color: var(--console-text);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+            font-size: 0.875rem;
+            border: 1px solid #334155;
+        }
+
+        .console-log {
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+            word-break: break-all; /* Ensure long hashes wrap */
+        }
+
+        .console-log a {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+
+        .console-log a:hover {
+            text-decoration: underline;
+        }
+
+        .wallet-info {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .wallet-info strong {
+            color: var(--text-primary);
+        }
+
+        /* Automation specific styles */
+        .automation-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .automation-controls .button-group {
+            margin-top: 0; /* Override default button-group margin */
+        }
+
+        .route-selection {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .route-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background-color: var(--background-color);
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            transition: background-color 0.2s ease;
+        }
+
+        .route-item:hover {
+            background-color: #e2e8f0;
+        }
+
+        .route-item input[type="checkbox"] {
+            width: auto;
+            margin-right: 0.5rem;
+        }
+
+        .route-item label {
+            margin-bottom: 0;
+            font-weight: 400;
+            flex-grow: 1;
+            cursor: pointer;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #cbd5e1; /* Default grey */
+            margin-left: 0.5rem;
+        }
+
+        .status-indicator.active {
+            background-color: var(--secondary-color); /* Green */
+        }
+
+        .status-indicator.inactive {
+            background-color: #ef4444; /* Red */
+        }
+
+        .automation-status {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .automation-status span {
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: var(--card-background);
+            margin: auto;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: 80%;
+            max-width: 500px;
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .modal-content p {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .modal-close-button {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        /* Responsive adjustments */
+        @media (min-width: 768px) {
+            .container {
+                flex-direction: row;
+                justify-content: space-between;
+            }
+
+            .card {
+                width: calc(50% - 1rem); /* Two columns */
+            }
+
+            .main-form-card {
+                flex-grow: 1;
+            }
+
+            .automation-card {
+                flex-grow: 1;
+            }
+        }
+
+        @media (max-width: 767px) {
+            body {
+                padding: 1rem;
+            }
+            .card {
+                padding: 1.5rem;
+            }
+            h1 {
+                font-size: 1.75rem;
+            }
+            h2 {
+                font-size: 1.25rem;
+            }
+            .button-group button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card main-form-card">
+            <h1>Union Bridge by Zun</h1>
+
+            <div class="button-group">
+                <button id="connectWalletButton" class="btn-primary">
+                    <i class="fas fa-wallet"></i> Connect Wallet
+                </button>
+                <button id="disconnectWalletButton" class="btn-outline" style="display: none;">
+                    <i class="fas fa-unlink"></i> Disconnect Wallet
+                </button>
+            </div>
+            <div id="walletInfo" class="wallet-info" style="display: none;">
+                Connected: <strong id="connectedAddress"></strong> (Chain ID: <strong id="connectedChainId"></strong>)
+            </div>
+
+            <h2>Manual Bridge Transfer</h2>
+            <div class="form-group">
+                <label for="fromChain">From Chain (ID):</label>
+                <input type="text" id="fromChain" placeholder="e.g., xion-testnet-2">
+            </div>
+            <div class="form-group">
+                <label for="toChain">To Chain (ID):</label>
+                <input type="text" id="toChain" placeholder="e.g., 1328 (SEI)">
+            </div>
+            <div class="form-group">
+                <label for="asset">Asset Address:</label>
+                <input type="text" id="asset" placeholder="e.g., 0x7578696f6e ($XION)">
+            </div>
+            <div class="form-group">
+                <label for="amount">Amount:</label>
+                <input type="number" id="amount" step="any" placeholder="e.g., 0.01">
+            </div>
+            <div class="form-group">
+                <label for="receiver">Receiver Address (Optional):</label>
+                <input type="text" id="receiver" placeholder="Defaults to connected wallet if empty">
+            </div>
+
+            <div class="button-group">
+                <button id="executeButton" class="btn-secondary">
+                    <i class="fas fa-paper-plane"></i> Execute Bridge
+                </button>
+            </div>
+        </div>
+
+        <div class="card automation-card">
+            <h2>Automation Tool</h2>
+            <div class="automation-controls">
+                <div class="form-group">
+                    <label for="txnDelay">Delay between transactions (seconds):</label>
+                    <input type="number" id="txnDelay" value="10" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="numTxns">Number of transactions per route:</label>
+                    <input type="number" id="numTxns" value="1" min="1">
+                </div>
+
+                <h3>Select Routes:</h3>
+                <div id="routeSelection" class="route-selection">
+                    <!-- Routes will be dynamically loaded here -->
+                </div>
+
+                <div class="button-group">
+                    <button id="startAutomationButton" class="btn-primary">
+                        <i class="fas fa-play"></i> Start Automation
+                    </button>
+                    <button id="stopAutomationButton" class="btn-danger" style="display: none;">
+                        <i class="fas fa-stop"></i> Stop Automation
+                    </button>
+                </div>
+                <div id="automationStatus" class="automation-status" style="display: none;">
+                    Status: <span id="currentAutomationStatus">Idle</span> (Route <span id="currentRouteIndex">0</span>/<span id="totalRoutes">0</span>, Tx <span id="currentTxnIndex">0</span>/<span id="totalTxns">0</span>)
+                </div>
+            </div>
+
+            <h2>Console Output</h2>
+            <div id="consoleOutput" class="console-output">
+                <!-- Log entries will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Modal for Alerts/Confirmations -->
+    <div id="customModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close-button">&times;</span>
+            <h3 id="modalTitle"></h3>
+            <p id="modalMessage"></p>
+            <div class="modal-buttons">
+                <button id="modalConfirmBtn" class="btn-primary" style="display: none;">Confirm</button>
+                <button id="modalCancelBtn" class="btn-outline">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase imports and setup (boilerplate as per instructions)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        let app, db, auth;
+        let userId; // Will store the authenticated user ID or a random one
+
+        // Global variables provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase and handle authentication
+        async function initializeFirebase() {
+            try {
+                if (Object.keys(firebaseConfig).length > 0) {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    auth = getAuth(app);
+
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            createLogEntry(`Firebase: User authenticated. UID: ${userId}`, 'info');
+                        } else {
+                            // If no user, sign in anonymously or with custom token
+                            if (initialAuthToken) {
+                                try {
+                                    await signInWithCustomToken(auth, initialAuthToken);
+                                    userId = auth.currentUser.uid;
+                                    createLogEntry(`Firebase: Signed in with custom token. UID: ${userId}`, 'info');
+                                } catch (error) {
+                                    createLogEntry(`Firebase Auth Error (Custom Token): ${error.message}`, 'error');
+                                    await signInAnonymously(auth);
+                                    userId = auth.currentUser.uid || crypto.randomUUID(); // Fallback to random if anonymous fails
+                                    createLogEntry(`Firebase: Signed in anonymously. UID: ${userId}`, 'info');
+                                }
+                            } else {
+                                await signInAnonymously(auth);
+                                userId = auth.currentUser.uid || crypto.randomUUID(); // Fallback to random if anonymous fails
+                                createLogEntry(`Firebase: Signed in anonymously. UID: ${userId}`, 'info');
+                            }
+                        }
+                    });
+                } else {
+                    createLogEntry("Firebase config not found. Running without Firebase.", 'info');
+                    userId = crypto.randomUUID(); // Generate a random ID if Firebase is not configured
+                }
+            } catch (error) {
+                createLogEntry(`Error initializing Firebase: ${error.message}`, 'error');
+                userId = crypto.randomUUID(); // Fallback to random ID on error
+            }
+        }
+
+        // Call Firebase initialization on window load
+        window.addEventListener('load', initializeFirebase);
+
+
+        // UI Elements
+        const connectWalletButton = document.getElementById('connectWalletButton');
+        const disconnectWalletButton = document.getElementById('disconnectWalletButton');
+        const executeButton = document.getElementById('executeButton');
+        const consoleOutput = document.getElementById('consoleOutput');
+        const walletInfo = document.getElementById('walletInfo');
+        const connectedAddressSpan = document.getElementById('connectedAddress');
+        const connectedChainIdSpan = document.getElementById('connectedChainId');
+
+        const fromChainInput = document.getElementById('fromChain');
+        const toChainInput = document.getElementById('toChain');
+        const assetInput = document.getElementById('asset');
+        const amountInput = document.getElementById('amount');
+        const receiverInput = document.getElementById('receiver');
+
+        const txnDelayInput = document.getElementById('txnDelay');
+        const numTxnsInput = document.getElementById('numTxns');
+        const routeSelectionDiv = document.getElementById('routeSelection');
+        const startAutomationButton = document.getElementById('startAutomationButton');
+        const stopAutomationButton = document.getElementById('stopAutomationButton');
+        const automationStatusDiv = document.getElementById('automationStatus');
+        const currentAutomationStatusSpan = document.getElementById('currentAutomationStatus');
+        const currentRouteIndexSpan = document.getElementById('currentRouteIndex');
+        const totalRoutesSpan = document.getElementById('totalRoutes');
+        const currentTxnIndexSpan = document.getElementById('currentTxnIndex');
+        const totalTxnsSpan = document.getElementById('totalTxns');
+
+        // Custom Modal Elements
+        const customModal = document.getElementById('customModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMessage = document.getElementById('modalMessage');
+        const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+        const modalCancelBtn = document.getElementById('modalCancelBtn');
+        const modalCloseButton = document.querySelector('.modal-close-button');
+
+        let provider;
+        let signer;
+        let currentAccount = null;
+        let currentChainId = null;
+        let automationRunning = false;
+        let automationAbortController = null; // For stopping the automation gracefully
+
+        // --- Custom Modal Functions (replacing alert/confirm) ---
+        function showModal(title, message, isConfirm = false) {
+            return new Promise((resolve) => {
+                modalTitle.textContent = title;
+                modalMessage.textContent = message;
+                modalConfirmBtn.style.display = isConfirm ? 'inline-block' : 'none';
+                customModal.style.display = 'flex'; // Use flex to center
+
+                const confirmHandler = () => {
+                    customModal.style.display = 'none';
+                    modalConfirmBtn.removeEventListener('click', confirmHandler);
+                    modalCancelBtn.removeEventListener('click', cancelHandler);
+                    modalCloseButton.removeEventListener('click', cancelHandler);
+                    resolve(true);
+                };
+
+                const cancelHandler = () => {
+                    customModal.style.display = 'none';
+                    modalConfirmBtn.removeEventListener('click', confirmHandler);
+                    modalCancelBtn.removeEventListener('click', cancelHandler);
+                    modalCloseButton.removeEventListener('click', cancelHandler);
+                    resolve(false);
+                };
+
+                modalConfirmBtn.addEventListener('click', confirmHandler);
+                modalCancelBtn.addEventListener('click', cancelHandler);
+                modalCloseButton.addEventListener('click', cancelHandler);
+            });
+        }
+
+        // --- Utility Functions ---
+        function shortenHash(hash) {
+            if (!hash) return '';
+            return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
+        }
+
+        function createLogEntry(message, type = 'info', txHash = null) {
+            const logEntry = document.createElement('div');
+            logEntry.classList.add('console-log');
+
+            const timestamp = new Date().toLocaleTimeString();
+            const typeColor = {
+                'info': '#4ade80',    // Green
+                'error': '#f87171',   // Red
+                'success': '#60a5fa', // Blue
+                'warn': '#facc15'     // Yellow
+            };
+
+            let messageContent = message;
+            if (txHash) {
+                let explorerUrl;
+                // Basic check for common chains. Extend as needed.
+                if (message.startsWith('Approval Tx Hash:') || message.startsWith('Bridge Tx Hash:')) {
+                    // This is a simplified example. In a real app, you'd map chain IDs to explorer URLs.
+                    // For Sepolia, we can use Etherscan. For Union's internal transfers, use their explorer.
+                    if (currentChainId === 11155111) { // Sepolia Chain ID
+                        explorerUrl = `https://sepolia.etherscan.io/tx/${txHash}`;
+                    } else if (currentChainId === 17000) { // Holesky Chain ID
+                        explorerUrl = `https://holesky.etherscan.io/tx/${txHash}`;
+                    }
+                    else {
+                        explorerUrl = `https://app.union.build/explorer/transfers/${txHash}`; // Generic Union explorer
+                    }
+                } else {
+                    explorerUrl = `https://app.union.build/explorer/transfers/${txHash}`;
+                }
+                messageContent += ` <a href="${explorerUrl}" target="_blank">${shortenHash(txHash)}</a>`;
+            }
+
+            logEntry.innerHTML = `
+                <span style="color: #64748b; margin-right: 0.5rem;">[${timestamp}]</span>
+                <span style="color: ${typeColor[type]}">${messageContent}</span>
+            `;
+
+            consoleOutput.appendChild(logEntry);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        // --- Wallet Connection Logic ---
+        async function connectWallet() {
+            if (typeof window.ethereum === 'undefined') {
+                showModal('MetaMask Not Found', 'Please install MetaMask to use this application.');
+                return;
+            }
+
+            try {
+                // Request account access
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                currentAccount = accounts[0];
+
+                // Initialize ethers provider and signer
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+
+                // Get chain ID
+                const network = await provider.getNetwork();
+                currentChainId = network.chainId;
+
+                connectedAddressSpan.textContent = shortenHash(currentAccount);
+                connectedChainIdSpan.textContent = currentChainId;
+                walletInfo.style.display = 'block';
+                connectWalletButton.style.display = 'none';
+                disconnectWalletButton.style.display = 'flex'; // Use flex for button display
+
+                createLogEntry(`Wallet connected: ${currentAccount} on Chain ID: ${currentChainId}`, 'success');
+
+                // Listen for account and chain changes
+                window.ethereum.on('accountsChanged', handleAccountsChanged);
+                window.ethereum.on('chainChanged', handleChainChanged);
+
+            } catch (error) {
+                createLogEntry(`Error connecting wallet: ${error.message}`, 'error');
+                showModal('Connection Error', `Failed to connect wallet: ${error.message}`);
+            }
+        }
+
+        async function disconnectWallet() {
+            currentAccount = null;
+            currentChainId = null;
+            provider = null;
+            signer = null;
+
+            connectedAddressSpan.textContent = '';
+            connectedChainIdSpan.textContent = '';
+            walletInfo.style.display = 'none';
+            connectWalletButton.style.display = 'flex'; // Use flex for button display
+            disconnectWalletButton.style.display = 'none';
+
+            // Remove listeners
+            window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+            window.ethereum.removeListener('chainChanged', handleChainChanged);
+
+            createLogEntry('Wallet disconnected.', 'info');
+        }
+
+        function handleAccountsChanged(accounts) {
+            if (accounts.length === 0) {
+                createLogEntry('MetaMask: Disconnected from accounts. Please connect again.', 'warn');
+                disconnectWallet();
+            } else if (accounts[0] !== currentAccount) {
+                currentAccount = accounts[0];
+                connectedAddressSpan.textContent = shortenHash(currentAccount);
+                createLogEntry(`MetaMask: Account changed to ${currentAccount}`, 'info');
+            }
+        }
+
+        function handleChainChanged(chainId) {
+            // Reload the page or re-initialize provider/signer
+            createLogEntry(`MetaMask: Chain changed to ${parseInt(chainId, 16)}. Please refresh or reconnect.`, 'warn');
+            // For simplicity, we'll just update the display and ask user to reconnect
+            currentChainId = parseInt(chainId, 16);
+            connectedChainIdSpan.textContent = currentChainId;
+            // Optionally, you might want to call connectWallet() again here
+            // to re-initialize provider/signer with the new chain.
+        }
+
+        // --- Union SDK Mock/Placeholder ---
+        // IMPORTANT: This is a MOCK UnionSDK.
+        // You need to replace this with the actual UnionSDK or your direct contract interaction logic.
+        // The actual SDK would handle contract calls, gas estimation, approvals, etc.
+        const UnionSDK = {
+            async prepareBridge(fromChainId, toChainId, assetAddress, amount, receiverAddress) {
+                createLogEntry(`[MOCK SDK] Preparing bridge: From ${fromChainId} to ${toChainId}, Asset: ${assetAddress}, Amount: ${amount}, Receiver: ${receiverAddress}`, 'info');
+                // Simulate network delay
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                // In a real SDK, this would return a prepared transaction object or similar.
+                // For mock, we just return a dummy object.
+                return {
+                    success: true,
+                    message: "Bridge prepared successfully (MOCK)",
+                    // In a real scenario, this might include a transaction object or data for executeBridge
+                    mockTxData: {
+                        fromChainId, toChainId, assetAddress, amount, receiverAddress
+                    }
+                };
+            },
+
+            async executeBridge(preparedTxData, signer) {
+                createLogEntry(`[MOCK SDK] Executing bridge: ${JSON.stringify(preparedTxData)}`, 'info');
+                // Simulate transaction signing and broadcast
+                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                // Simulate success or failure randomly for demonstration
+                const success = Math.random() > 0.1; // 90% success rate
+                if (success) {
+                    const mockTxHash = '0x' + Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+                    createLogEntry(`[MOCK SDK] Bridge executed successfully! Tx Hash: ${mockTxHash}`, 'success', mockTxHash);
+                    return { success: true, txHash: mockTxHash };
+                } else {
+                    createLogEntry(`[MOCK SDK] Bridge execution failed! (Simulated error)`, 'error');
+                    return { success: false, error: "Simulated bridge failure" };
+                }
+            }
+        };
+
+        // --- Bridge Execution Logic ---
+        async function prepareBridge(fromChain, toChain, asset, amount, receiver) {
+            if (!signer) {
+                showModal('Wallet Not Connected', 'Please connect your wallet first.');
+                createLogEntry('Bridge failed: Wallet not connected.', 'error');
+                return;
+            }
+
+            // Use connected account as receiver if not provided
+            const finalReceiver = receiver || currentAccount;
+            if (!finalReceiver) {
+                showModal('Receiver Address Missing', 'Please provide a receiver address or connect your wallet.');
+                createLogEntry('Bridge failed: Receiver address missing.', 'error');
+                return;
+            }
+
+            createLogEntry(`Initiating bridge: ${fromChain} -> ${toChain} for ${amount} of ${asset} to ${finalReceiver}...`, 'info');
+
+            try {
+                // Step 1: Prepare the bridge (e.g., get approval data, destination details)
+                const prepared = await UnionSDK.prepareBridge(fromChain, toChain, asset, amount, finalReceiver);
+
+                if (!prepared.success) {
+                    createLogEntry(`Bridge preparation failed: ${prepared.message || 'Unknown error'}`, 'error');
+                    showModal('Bridge Preparation Failed', prepared.message || 'Unknown error during preparation.');
+                    return;
+                }
+                createLogEntry('Bridge prepared. Proceeding to execute...', 'info');
+
+                // Step 2: Execute the bridge (e.g., send the actual transaction)
+                const executionResult = await UnionSDK.executeBridge(prepared.mockTxData, signer); // Pass prepared data and signer
+
+                if (executionResult.success) {
+                    createLogEntry(`Bridge transfer successful! Tx Hash: ${executionResult.txHash}`, 'success', executionResult.txHash);
+                    return true; // Indicate success for automation
+                } else {
+                    createLogEntry(`Bridge execution failed: ${executionResult.error || 'Unknown error'}`, 'error');
+                    showModal('Bridge Execution Failed', executionResult.error || 'Unknown error during execution.');
+                    return false; // Indicate failure for automation
+                }
+
+            } catch (error) {
+                createLogEntry(`An unexpected error occurred during bridging: ${error.message}`, 'error');
+                showModal('Unexpected Error', `An error occurred: ${error.message}`);
+                return false; // Indicate failure for automation
+            }
+        }
+
+        // --- Automation Logic ---
+        const automationRoutes = [
+            {
+                name: "XION to SEI ($XION)",
+                fromChain: "xion-testnet-2",
+                toChain: "1328", // SEI testnet chain ID
+                asset: "0x7578696f6e", // $XION asset address
+                receiver: "" // Will use connected wallet
+            },
+            {
+                name: "Babylon to XION ($USDC)",
+                fromChain: "bbn-test-5",
+                toChain: "xion-testnet-2",
+                asset: "0x62626e317a7372763233616b6b6778646e77756c3732736674677632786a74356b68736e743377776a687030666668363833687a7035617135613068366e", // $USDC asset address
+                receiver: "" // Will use connected wallet
+            },
+            {
+                name: "Babylon to XION ($BABY)",
+                fromChain: "bbn-test-5",
+                toChain: "xion-testnet-2",
+                asset: "0x7562626e", // $BABY asset address
+                receiver: "" // Will use connected wallet
+            },
+            {
+                name: "Babylon to XION ($LINK)",
+                fromChain: "bbn-test-5",
+                toChain: "xion-testnet-2",
+                asset: "0x62626e317579797a71776e787135686d7234647267383836717a37777977376d6e78613836703979746d6b397a646b6375357a7230393573647164373537", // $LINK asset address
+                receiver: "" // Will use connected wallet
+            },
+            {
+                name: "SEI to CORN ($SEI)",
+                fromChain: "1328", // SEI testnet chain ID
+                toChain: "21000001", // CORN testnet chain ID
+                asset: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", // Native SEI asset
+                receiver: "" // Will use connected wallet
+            },
+            // Add Sepolia and Holesky routes if you have specific asset/chain IDs for them
+            // Example (placeholders):
+            // {
+            //     name: "Sepolia to XION (ETH)",
+            //     fromChain: "11155111", // Sepolia Chain ID
+            //     toChain: "xion-testnet-2",
+            //     asset: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", // Native ETH on Sepolia
+            //     receiver: ""
+            // },
+            // {
+            //     name: "Holesky to SEI (ETH)",
+            //     fromChain: "17000", // Holesky Chain ID
+            //     toChain: "1328", // SEI testnet chain ID
+            //     asset: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", // Native ETH on Holesky
+            //     receiver: ""
+            // }
+        ];
+
+        function renderAutomationRoutes() {
+            routeSelectionDiv.innerHTML = '';
+            automationRoutes.forEach((route, index) => {
+                const routeItem = document.createElement('div');
+                routeItem.classList.add('route-item');
+                routeItem.innerHTML = `
+                    <input type="checkbox" id="route-${index}" data-index="${index}" checked>
+                    <label for="route-${index}">${route.name}</label>
+                    <span class="status-indicator" id="status-indicator-${index}"></span>
+                `;
+                routeSelectionDiv.appendChild(routeItem);
+            });
+        }
+
+        async function startAutomation() {
+            if (automationRunning) {
+                showModal('Automation Running', 'Automation is already in progress.');
+                return;
+            }
+            if (!signer) {
+                showModal('Wallet Not Connected', 'Please connect your wallet before starting automation.');
+                createLogEntry('Automation failed: Wallet not connected.', 'error');
+                return;
+            }
+
+            const selectedRoutes = Array.from(document.querySelectorAll('#routeSelection input[type="checkbox"]:checked'))
+                                       .map(checkbox => automationRoutes[parseInt(checkbox.dataset.index)]);
+
+            if (selectedRoutes.length === 0) {
+                showModal('No Routes Selected', 'Please select at least one route to automate.');
+                return;
+            }
+
+            const txnDelaySeconds = parseInt(txnDelayInput.value);
+            const numTxnsPerRoute = parseInt(numTxnsInput.value);
+            const amountToSend = parseFloat(amountInput.value) || 0.01; // Default amount if not set
+
+            if (isNaN(txnDelaySeconds) || txnDelaySeconds < 1) {
+                showModal('Invalid Delay', 'Please enter a valid delay (minimum 1 second).');
+                return;
+            }
+            if (isNaN(numTxnsPerRoute) || numTxnsPerRoute < 1) {
+                showModal('Invalid Number of Transactions', 'Please enter a valid number of transactions (minimum 1).');
+                return;
+            }
+
+            automationRunning = true;
+            automationAbortController = new AbortController();
+            const signal = automationAbortController.signal;
+
+            startAutomationButton.style.display = 'none';
+            stopAutomationButton.style.display = 'flex';
+            automationStatusDiv.style.display = 'block';
+
+            totalRoutesSpan.textContent = selectedRoutes.length;
+            totalTxnsSpan.textContent = numTxnsPerRoute;
+
+            createLogEntry('Starting automation...', 'info');
+
+            try {
+                for (let i = 0; i < selectedRoutes.length; i++) {
+                    if (signal.aborted) {
+                        createLogEntry('Automation stopped by user.', 'warn');
+                        break;
+                    }
+
+                    const route = selectedRoutes[i];
+                    currentRouteIndexSpan.textContent = i + 1;
+                    currentAutomationStatusSpan.textContent = `Processing Route: ${route.name}`;
+                    const routeIndicator = document.getElementById(`status-indicator-${automationRoutes.indexOf(route)}`);
+                    if (routeIndicator) routeIndicator.classList.add('active');
+
+                    createLogEntry(`--- Starting automation for route: ${route.name} ---`, 'info');
+
+                    for (let j = 0; j < numTxnsPerRoute; j++) {
+                        if (signal.aborted) {
+                            createLogEntry('Automation stopped by user.', 'warn');
+                            break;
+                        }
+
+                        currentTxnIndexSpan.textContent = j + 1;
+                        currentAutomationStatusSpan.textContent = `Processing Route: ${route.name} (Tx ${j + 1}/${numTxnsPerRoute})`;
+
+                        createLogEntry(`Executing transaction ${j + 1}/${numTxnsPerRoute} for route: ${route.name}...`, 'info');
+
+                        const success = await prepareBridge(
+                            route.fromChain,
+                            route.toChain,
+                            route.asset,
+                            amountToSend.toString(), // Ensure amount is string for input
+                            route.receiver || currentAccount // Use connected account if receiver is empty
+                        );
+
+                        if (success) {
+                            createLogEntry(`Transaction ${j + 1} for ${route.name} completed successfully.`, 'success');
+                        } else {
+                            createLogEntry(`Transaction ${j + 1} for ${route.name} failed. Continuing to next...`, 'error');
+                        }
+
+                        if (j < numTxnsPerRoute - 1 && !signal.aborted) {
+                            createLogEntry(`Waiting for ${txnDelaySeconds} seconds before next transaction...`, 'info');
+                            await new Promise(resolve => setTimeout(resolve, txnDelaySeconds * 1000));
+                        }
+                    }
+                    if (routeIndicator) routeIndicator.classList.remove('active');
+                    if (routeIndicator) routeIndicator.classList.add('inactive'); // Mark as completed/inactive
+                }
+                createLogEntry('Automation finished!', 'success');
+                showModal('Automation Complete', 'All selected transactions have been processed.');
+            } catch (error) {
+                createLogEntry(`Automation encountered a critical error: ${error.message}`, 'error');
+                showModal('Automation Error', `A critical error occurred: ${error.message}`);
+            } finally {
+                automationRunning = false;
+                startAutomationButton.style.display = 'flex';
+                stopAutomationButton.style.display = 'none';
+                automationStatusDiv.style.display = 'none';
+                currentAutomationStatusSpan.textContent = 'Idle';
+                currentRouteIndexSpan.textContent = '0';
+                currentTxnIndexSpan.textContent = '0';
+                // Reset status indicators
+                document.querySelectorAll('.status-indicator').forEach(indicator => {
+                    indicator.classList.remove('active', 'inactive');
+                });
+            }
+        }
+
+        function stopAutomation() {
+            if (automationAbortController) {
+                automationAbortController.abort();
+                createLogEntry('Stopping automation...', 'warn');
+            }
+        }
+
+        // --- Event Listeners ---
+        connectWalletButton.addEventListener('click', connectWallet);
+        disconnectWalletButton.addEventListener('click', disconnectWallet);
+        executeButton.addEventListener('click', () => {
+            const fromChain = fromChainInput.value;
+            const toChain = toChainInput.value;
+            const asset = assetInput.value;
+            const amount = amountInput.value;
+            const receiver = receiverInput.value;
+            prepareBridge(fromChain, toChain, asset, amount, receiver);
+        });
+        startAutomationButton.addEventListener('click', startAutomation);
+        stopAutomationButton.addEventListener('click', stopAutomation);
+
+        // Initial render of automation routes
+        renderAutomationRoutes();
+    </script>
+</body>
+</html>

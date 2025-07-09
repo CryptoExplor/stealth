@@ -1842,9 +1842,9 @@ https://rpc.goerli.dev,5</textarea>
                 if (rand < (cumulativeProb += walletSessionProbs.send)) return 'send';
                 if (rand < (cumulativeProb += walletSessionProbs.deploy)) return 'deploy'; // NEW
                 if (rand < (cumulativeProb += walletSessionProbs.interact)) return 'interact'; // NEW
-                if (rand < (cumulativeProb += walletSessionProbs.idle)) return 'idle';
+                if (rand < (cumulativeProb += walletSessionProbs.idle)) return 'idle-action';
                 if (rand < (cumulativeProb += walletSessionProbs['balance-check'])) return 'balance-check';
-                return 'idle'; // Fallback, should not be reached if sum is 100
+                return 'idle-action'; // Fallback, should not be reached if sum is 100
             };
 
             const scanRecentBlocks = async (rpc, chainId) => {
@@ -2295,11 +2295,7 @@ https://rpc.goerli.dev,5</textarea>
 
                             appState.stats.totalActions++;
                             ui.progressText.textContent = `${appState.stats.totalActions}`;
-                            // Calculate progress percentage based on actions performed vs. expected total actions
-                            let totalExpectedActions = appState.wallets.length * appState.config.maxTxnsPerWallet * appState.rpcConfigs.length;
-                            if (totalExpectedActions === 0) totalExpectedActions = 1; // Prevent division by zero
-                            const progressPercent = Math.min(100, Math.round((appState.stats.totalActions / totalExpectedActions) * 100));
-                            ui.progressBar.style.width = `${progressPercent}%`;
+                            ui.progressBar.style.width = `100%`;
 
                             // Gas Price Check (still relevant for skipping if too high, before applying random factor)
                             let currentGasPrice = null;
@@ -2407,9 +2403,7 @@ https://rpc.goerli.dev,5</textarea>
                                     const randomGasFactor = Stealth.getRandomInRange(appState.config.minGasFactor, appState.config.maxGasFactor);
                                     if (maxFeePerGas && maxPriorityFeePerGas) { // EIP-1559 chain
                                         // Apply random factor to base fee and priority fee
-                                            // Add a buffer proportional to maxPriorityFeePerGas (e.g., 10%)
-                                            const buffer = tx.maxPriorityFeePerGas / BigInt(10); // 10% buffer
-                                            tx.maxFeePerGas = tx.maxPriorityFeePerGas + buffer;
+                                        tx.maxFeePerGas = (maxFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
                                         tx.maxPriorityFeePerGas = (maxPriorityFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
                                         // Ensure maxFeePerGas is at least maxPriorityFeePerGas
                                         if (tx.maxFeePerGas < tx.maxPriorityFeePerGas) {
@@ -2462,11 +2456,11 @@ https://rpc.goerli.dev,5</textarea>
                                         updateActionDistChart('skipped');
                                     }
                                     updateActionDistChart('interact'); // Update chart for interact action
-                                case "idle":
+                                    break;
+
+                                case "idle-action":
                                     log(`Wallet ...${walletAddress.slice(-6)} is idling for this action.`, 'info', { chainId, walletAddress, action: 'idle' });
                                     updateActionDistChart('idle');
-                                    actionSuccess = true;
-                                    break;
                                     actionSuccess = true;
                                     break;
 
@@ -2482,37 +2476,19 @@ https://rpc.goerli.dev,5</textarea>
                                     break;
                             }
 
-                            // Track skipped actions separately for accurate statistics
-                            if (chosenBehavior === 'send' && (
-                                (appState.config.recipientMode === 'fixed' && !ethers.isAddress(ui.fixedAddress.value.trim())) ||
-                                (appState.config.recipientMode === 'list' && appState.manualRecipientList.length === 0) ||
-                                (appState.config.recipientMode === 'predefined' && appState.predefinedRecipientList.length === 0) ||
-                                (appState.config.recipientMode === 'self-interact' && appState.wallets.filter(w => w.address.toLowerCase() !== walletAddress.toLowerCase()).length === 0) ||
-                                (appState.config.recipientMode === 'pool' && (!appState.currentRecipientPool[chainId] || appState.currentRecipientPool[chainId].length === 0) && appState.wallets.filter(w => w.address.toLowerCase() !== walletAddress.toLowerCase()).length === 0)
-                            )) {
-                                // Skipped send action
-                                appState.stats.actionCounts.skipped = (appState.stats.actionCounts.skipped || 0) + 1;
+                            if (actionSuccess) {
+                                appState.stats.successfulActions++;
+                            } else {
+                                appState.stats.failedActions++;
+                            }
+                            // Update counts on UI immediately after each action attempt
+                            ui.successCount.textContent = appState.stats.successfulActions.toString();
+                            ui.failCount.textContent = appState.stats.failedActions.toString();
+                            // updateActionDistChart(chosenBehavior); // This is already called inside each case
+
                             try {
                                 const newBalanceWei = await provider.getBalance(wallet.address);
                                 walletInfo.balance = parseFloat(ethers.formatEther(newBalanceWei)).toFixed(6);
-                                // Do not update the chart here; batch update after all actions for this wallet.
-                            } catch (balanceUpdateError) {
-                                log(`Failed to update balance for ...${walletInfo.address.slice(-6)}: ${balanceUpdateError.message}`, 'warning');
-                                // NEW: Time-of-Day Bias (log only once per session)
-                                if (appState.config.enableTimeOfDayBias) {
-                                    const currentHour = new Date().getHours();
-                                    // Reduce activity during simulated night hours (e.g., 1 AM to 6 AM)
-                                    if (currentHour >= 1 && currentHour < 6) {
-                                        currentMinDelay *= 2; // Double min delay
-                                        currentMaxDelay *= 2; // Double max delay
-                                        if (!appState.timeOfDayBiasLogged) {
-                                            log(`Applying time-of-day bias: increased delay due to night hours.`, 'info');
-                                            appState.timeOfDayBiasLogged = true;
-                                        }
-                                    } else {
-                                        appState.timeOfDayBiasLogged = false;
-                                    }
-                                }
                                 updateWalletBalanceChart();
                             } catch (balanceUpdateError) {
                                 log(`Failed to update balance for ...${walletInfo.address.slice(-6)}: ${balanceUpdateError.message}`, 'warning');
@@ -2533,10 +2509,7 @@ https://rpc.goerli.dev,5</textarea>
                                     }
                                 }
 
-                        } // End of actionsForWallet loop
-
-                        // Batch update wallet balance chart after all actions for this wallet
-                        updateWalletBalanceChart();
+                                // NEW: Think Time Bursts
                                 if (Math.random() * 100 < appState.config.thinkTimeChance) {
                                     delayUsed = Stealth.generateLogNormalDelay(appState.config.minThinkTime, appState.config.maxThinkTime);
                                     log(`Waiting for a human-like "think time" burst of ${Math.round(delayUsed/1000)} seconds...`, 'info');
@@ -2934,16 +2907,16 @@ https://rpc.goerli.dev,5</textarea>
                     document.documentElement.classList.toggle('dark');
                     const isDarkMode = document.documentElement.classList.contains('dark');
                     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-                    // Refresh the action distribution chart without incrementing any action count
-                    if (appState.charts.actionDist) {
-                        appState.charts.actionDist.update();
-                    }
-                });
+                    ui.themeToggleIcon.classList.toggle('fa-sun', isDarkMode);
+                    ui.themeToggleIcon.classList.toggle('fa-moon', !isDarkMode);
+                    // Re-initialize charts to update colors based on new theme
+                    initConsoleCharts();
+                    updateWalletBalanceChart();
                     // Trigger a dummy update to refresh action chart colors, if needed
                     // This might be redundant if initConsoleCharts already resets data
                     // For now, let's just ensure the chart is updated with current (likely zero) stats
                     updateActionDistChart('send'); 
-                };
+                });
 
                 // Apply saved theme on load
                 const savedTheme = localStorage.getItem('theme');
@@ -2955,7 +2928,8 @@ https://rpc.goerli.dev,5</textarea>
                     document.documentElement.classList.remove('dark');
                     ui.themeToggleIcon.classList.add('fa-moon');
                     ui.themeToggleIcon.classList.remove('fa-sun');
-                };
+                }
+            };
 
             initConsoleCharts(); // Initialize charts for the console
             setupEventListeners();
@@ -3079,7 +3053,7 @@ https://rpc.goerli.dev,5</textarea>
                     closeQrModal();
                 }
             });
+        });
     </script>
-    <!-- End of Main Script -->
 </body>
 </html>

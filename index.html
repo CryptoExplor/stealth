@@ -2878,10 +2878,11 @@ https://rpc.goerli.dev,5</textarea>
                     const selected = e.target.value;
                     if (selected !== "custom") {
                         applyProfile(selected);
+                    } else {
+                        loadConfiguration(); // Ensure config is reloaded after applying profile
                     }
-                    loadConfiguration(); // Ensure config is reloaded after applying profile
                 });
-                
+
                 // Submenu toggle functionality
                 ui.advanceConsoleToggle.addEventListener('click', () => {
                     ui.advanceConsoleToggle.classList.toggle('active');

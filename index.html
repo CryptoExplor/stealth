@@ -1039,7 +1039,7 @@ https://rpc.goerli.dev,5</textarea>
         // Placeholder bytecodes for simplicity. In a real scenario, these would be full compiled bytecodes.
         // For demonstration, these are minimal valid bytecodes for simple contracts.
         // Storage Contract: Stores and retrieves a uint256.
-        const STORAGE_BYTECODE = "0x6080604052348015610010575f80fd5b5060043610610036575f3560e01c80632a1afcd91461003b57806360fe47b114610057575f80fd5b61004361006f565b60405161005091906100a3565b60405180910390f35b61006d600480360381019061006891906100e4565b610074565b005b5f8054905090565b5f819050919050565b61009181610082565b82525050565b5f6020820190506100ab5f83018461007d565b92915050565b5f6020820190506100c55f83018461007d565b92915050565b6000602082019050818103818337808201805160008190506000928190602082018282806000818480808080600073ffffffffffffffffffffffffffffffffffffffff16fffe";
+        const STORAGE_BYTECODE = "0x6080604052348015610010575f80fd5b5060043610610036575f3560e01c80632a1afcd91461003b57806360fe47b114610057575f80fd5b61004361006f565b60405161005091906100a3565b60405180910390f35b61006d600480360381019061006891906100e4565b610074565b005b5f8054905090565b5f819050919050565b61009181610082565b82525050565b5f6020820190506100ab5f83018461007d565b92915050565b5f6020820190506100c55f83018461007d565b92915050565b600060208201905081810381833780820180516000819050600092819060208201828280600073ffffffffffffffffffffffffffffffffffffffff16fffe";
         // Counter Contract: Increments and retrieves a counter.
         const COUNTER_BYTECODE = "0x6080604052348015610010575f80fd5b5060043610610036575f3560e01c806360fe47b1461003b5780638381f58214610057575f80fd5b610043610073565b60405161005091906100a7565b60405180910390f35b61005f610078565b6040518082815260200191505060405180910390f35b5f8054905090565b5f819050919050565b61009081610082565b82525050565b5f60208201905061009f5f83018461007c565b92915050565b5f6020820190506100b95f83018461007c565b92915050565b6000602082019050818103818337808201805160008190506000928190602082018282806000818480808080600073ffffffffffffffffffffffffffffffffffffffff16fffe";
         // Dummy Contract: Has two simple functions, ping and pong.
@@ -1134,8 +1134,38 @@ https://rpc.goerli.dev,5</textarea>
             const contractMeta = contracts[typeKey];
 
             try {
+                // Simulate random transaction error for deployment
+                if (Math.random() * 100 < appState.config.simulatedErrorChance) {
+                    throw new Error("Simulated network error: Deployment transaction dropped/failed.");
+                }
+
                 const factory = new ethers.ContractFactory(contractMeta.abi, contractMeta.bytecode, wallet);
-                const contract = await factory.deploy();
+                
+                // Get current gas prices to apply random factor
+                const feeData = await provider.getFeeData();
+                const currentGasPrice = feeData.gasPrice;
+                const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
+                const maxFeePerGas = feeData.maxFeePerGas;
+
+                const randomGasFactor = Stealth.getRandomInRange(appState.config.minGasFactor, appState.config.maxGasFactor);
+                log(`Attempting to deploy with random gas factor: x${randomGasFactor.toFixed(2)}`, 'info');
+
+                let deployOptions = {};
+                if (maxFeePerGas && maxPriorityFeePerGas) { // EIP-1559 chain
+                    deployOptions.maxFeePerGas = (maxFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
+                    deployOptions.maxPriorityFeePerGas = (maxPriorityFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
+                    if (deployOptions.maxFeePerGas < deployOptions.maxPriorityFeePerGas) {
+                        deployOptions.maxFeePerGas = deployOptions.maxPriorityFeePerGas + ethers.parseUnits('1', 'gwei'); 
+                    }
+                } else if (currentGasPrice) { // Legacy chain
+                    deployOptions.gasPrice = (currentGasPrice * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
+                }
+
+                log(`Deploying [${contractMeta.name}] from wallet ${wallet.address.slice(0,6)}...${wallet.address.slice(-4)}...`, 'info');
+                const contract = await factory.deploy(deployOptions);
+                log(`Deployment transaction sent! Hash: <a href="https://etherscan.io/tx/${contract.deploymentTransaction().hash}" target="_blank" class="underline">${contract.deploymentTransaction().hash.slice(0,6)}...${contract.deploymentTransaction().hash.slice(-4)}</a><button class="log-copy-btn" data-tx-hash="${contract.deploymentTransaction().hash}">📋</button>`, 'success');
+
+                log(`Waiting for [${contractMeta.name}] deployment to be confirmed...`, 'info');
                 await contract.waitForDeployment();
                 const address = await contract.getAddress();
                 log(`📦 Deployed [${contractMeta.name}] at ${address.slice(0,6)}...${address.slice(-4)}`, "log-success");
@@ -2849,6 +2879,7 @@ https://rpc.goerli.dev,5</textarea>
                     if (selected !== "custom") {
                         applyProfile(selected);
                     }
+                    loadConfiguration(); // Ensure config is reloaded after applying profile
                 });
                 
                 // Submenu toggle functionality
@@ -2897,7 +2928,6 @@ https://rpc.goerli.dev,5</textarea>
                     initConsoleCharts();
                     updateWalletBalanceChart();
                     // Trigger a dummy update to refresh action chart colors, if needed
-                    // This might be redundant if initConsoleCharts already resets data
                     // For now, let's just ensure the chart is updated with current (likely zero) stats
                     updateActionDistChart('send'); 
                 });
@@ -3041,4 +3071,3 @@ https://rpc.goerli.dev,5</textarea>
     </script>
 </body>
 </html>
-	

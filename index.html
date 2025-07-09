@@ -1039,7 +1039,7 @@ https://rpc.goerli.dev,5</textarea>
         // Placeholder bytecodes for simplicity. In a real scenario, these would be full compiled bytecodes.
         // For demonstration, these are minimal valid bytecodes for simple contracts.
         // Storage Contract: Stores and retrieves a uint256.
-        const STORAGE_BYTECODE = "0x6080604052348015610010575f80fd5b5060043610610036575f3560e01c80632a1afcd91461003b57806360fe47b114610057575f80fd5b61004361006f565b60405161005091906100a3565b60405180910390f35b61006d600480360381019061006891906100e4565b610074565b005b5f8054905090565b5f819050919050565b61009181610082565b82525050565b5f6020820190506100ab5f83018461007d565b92915050565b5f6020820190506100c55f83018461007d565b92915050565b600060208201905081810381833780820180516000819050600092819060208201828280600073ffffffffffffffffffffffffffffffffffffffff16fffe";
+        const STORAGE_BYTECODE = "0x6080604052348015610010575f80fd5b5060043610610036575f3560e01c80632a1afcd91461003b57806360fe47b114610057575f80fd5b61004361006f565b60405161005091906100a3565b60405180910390f35b61006d600480360381019061006891906100e4565b610074565b005b5f8054905090565b5f819050919050565b61009181610082565b82525050565b5f6020820190506100ab5f83018461007d565b92915050565b5f6020820190506100c55f83018461007d565b92915050565b6000602082019050818103818337808201805160008190506000928190602082018282806000818480808080600073ffffffffffffffffffffffffffffffffffffffff16fffe";
         // Counter Contract: Increments and retrieves a counter.
         const COUNTER_BYTECODE = "0x6080604052348015610010575f80fd5b5060043610610036575f3560e01c806360fe47b1461003b5780638381f58214610057575f80fd5b610043610073565b60405161005091906100a7565b60405180910390f35b61005f610078565b6040518082815260200191505060405180910390f35b5f8054905090565b5f819050919050565b61009081610082565b82525050565b5f60208201905061009f5f83018461007c565b92915050565b5f6020820190506100b95f83018461007c565b92915050565b6000602082019050818103818337808201805160008190506000928190602082018282806000818480808080600073ffffffffffffffffffffffffffffffffffffffff16fffe";
         // Dummy Contract: Has two simple functions, ping and pong.
@@ -1134,45 +1134,42 @@ https://rpc.goerli.dev,5</textarea>
             const contractMeta = contracts[typeKey];
 
             try {
-                // Simulate random transaction error for deployment
-                if (Math.random() * 100 < appState.config.simulatedErrorChance) {
-                    throw new Error("Simulated network error: Deployment transaction dropped/failed.");
+                // --- FIX: Apply same gas logic as send transaction to prevent freeze ---
+                const feeData = await provider.getFeeData();
+                const txOverrides = {};
+                const randomGasFactor = Stealth.getRandomInRange(appState.config.minGasFactor, appState.config.maxGasFactor);
+
+                if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) { // EIP-1559
+                    txOverrides.maxFeePerGas = (feeData.maxFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
+                    txOverrides.maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
+                     if (txOverrides.maxFeePerGas < txOverrides.maxPriorityFeePerGas) {
+                        txOverrides.maxFeePerGas = txOverrides.maxPriorityFeePerGas;
+                    }
+                } else if (feeData.gasPrice) { // Legacy
+                    txOverrides.gasPrice = (feeData.gasPrice * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
                 }
+                log(`Attempting to deploy [${contractMeta.name}] with random gas factor: x${randomGasFactor.toFixed(2)}`, 'info');
+                // --- END FIX ---
 
                 const factory = new ethers.ContractFactory(contractMeta.abi, contractMeta.bytecode, wallet);
+                // Pass the transaction overrides to the deploy method
+                const contract = await factory.deploy(txOverrides);
+                const deployTx = contract.deploymentTransaction();
                 
-                // Get current gas prices to apply random factor
-                const feeData = await provider.getFeeData();
-                const currentGasPrice = feeData.gasPrice;
-                const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
-                const maxFeePerGas = feeData.maxFeePerGas;
+                log(`🚀 Deployment tx sent for [${contractMeta.name}]: <a href="https://etherscan.io/tx/${deployTx.hash}" target="_blank" class="underline">${deployTx.hash.slice(0,6)}...</a>. Waiting for confirmation...`, 'info');
 
-                const randomGasFactor = Stealth.getRandomInRange(appState.config.minGasFactor, appState.config.maxGasFactor);
-                log(`Attempting to deploy with random gas factor: x${randomGasFactor.toFixed(2)}`, 'info');
-
-                let deployOptions = {};
-                if (maxFeePerGas && maxPriorityFeePerGas) { // EIP-1559 chain
-                    deployOptions.maxFeePerGas = (maxFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
-                    deployOptions.maxPriorityFeePerGas = (maxPriorityFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
-                    if (deployOptions.maxFeePerGas < deployOptions.maxPriorityFeePerGas) {
-                        deployOptions.maxFeePerGas = deployOptions.maxPriorityFeePerGas + ethers.parseUnits('1', 'gwei'); 
-                    }
-                } else if (currentGasPrice) { // Legacy chain
-                    deployOptions.gasPrice = (currentGasPrice * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
-                }
-
-                log(`Deploying [${contractMeta.name}] from wallet ${wallet.address.slice(0,6)}...${wallet.address.slice(-4)}...`, 'info');
-                const contract = await factory.deploy(deployOptions);
-                log(`Deployment transaction sent! Hash: <a href="https://etherscan.io/tx/${contract.deploymentTransaction().hash}" target="_blank" class="underline">${contract.deploymentTransaction().hash.slice(0,6)}...${contract.deploymentTransaction().hash.slice(-4)}</a><button class="log-copy-btn" data-tx-hash="${contract.deploymentTransaction().hash}">📋</button>`, 'success');
-
-                log(`Waiting for [${contractMeta.name}] deployment to be confirmed...`, 'info');
                 await contract.waitForDeployment();
                 const address = await contract.getAddress();
-                log(`📦 Deployed [${contractMeta.name}] at ${address.slice(0,6)}...${address.slice(-4)}`, "log-success");
+                
+                log(`📦 Deployed [${contractMeta.name}] at ${address.slice(0,6)}...${address.slice(-4)}`, "success");
                 saveContract(wallet.address, chainId, address, contractMeta.name);
                 return { address, type: contractMeta.name };
             } catch (e) {
-                log(`❌ Failed to deploy [${contractMeta.name}]: ${e.message}`, "log-error");
+                let errorMessage = e.reason || e.message;
+                if (e.data && e.data.message) {
+                    errorMessage += ` - ${e.data.message}`;
+                }
+                log(`❌ Failed to deploy [${contractMeta.name}]: ${errorMessage}`, "error");
                 return null;
             }
         }
@@ -1187,7 +1184,7 @@ https://rpc.goerli.dev,5</textarea>
             const { address, type } = contractData;
             const contractMeta = Object.values(contracts).find(c => c.name === type);
             if (!contractMeta) {
-                log(`❌ Unknown contract type: ${type} for address ${address.slice(0,6)}...${address.slice(-4)}`, "log-error");
+                log(`❌ Unknown contract type: ${type} for address ${address.slice(0,6)}...${address.slice(-4)}`, "error");
                 return;
             }
             const contract = new ethers.Contract(address, contractMeta.abi, wallet);
@@ -1198,23 +1195,23 @@ https://rpc.goerli.dev,5</textarea>
                     const tx = await contract.store(val);
                     await tx.wait();
                     const result = await contract.retrieve();
-                    log(`📥 [Storage] ${address.slice(0,6)}...${address.slice(-4)}: Stored ${val} => Retrieved ${result}`, "log-info");
+                    log(`📥 [Storage] ${address.slice(0,6)}...${address.slice(-4)}: Stored ${val} => Retrieved ${result}`, "info");
                 } else if (type === "Counter") {
                     log(`[Counter] Calling increment() on ${address.slice(0,6)}...${address.slice(-4)}...`, 'info');
                     const tx = await contract.increment();
                     await tx.wait();
                     const count = await contract.get();
-                    log(`🔢 [Counter] ${address.slice(0,6)}...${address.slice(-4)}: Count = ${count}`, "log-info");
+                    log(`🔢 [Counter] ${address.slice(0,6)}...${address.slice(-4)}: Count = ${count}`, "info");
                 } else if (type === "Dummy") {
                     log(`[Dummy] Calling ping() and pong() on ${address.slice(0,6)}...${address.slice(-4)}...`, 'info');
                     const pingTx = await contract.ping();
                     await pingTx.wait();
                     const pongTx = await contract.pong();
                     await pongTx.wait();
-                    log(`🎯 [Dummy] ${address.slice(0,6)}...${address.slice(-4)} ping-pong success`, "log-info");
+                    log(`🎯 [Dummy] ${address.slice(0,6)}...${address.slice(-4)} ping-pong success`, "info");
                 }
             } catch (e) {
-                log(`❌ Interaction with [${type}] at ${address.slice(0,6)}...${address.slice(-4)} failed: ${e.message}`, "log-error");
+                log(`❌ Interaction with [${type}] at ${address.slice(0,6)}...${address.slice(-4)} failed: ${e.message}`, "error");
             }
         }
 
@@ -1235,11 +1232,11 @@ https://rpc.goerli.dev,5</textarea>
                 "block-lookback": 200,
                 "simulated-error-chance": 3,
                 "enable-time-of-day-bias": true,
-                "prob-send": 40, // Updated default
-                "prob-deploy": 20, // NEW default
-                "prob-interact": 20, // NEW default
-                "prob-idle-action": 10, // Updated default
-                "prob-balance-check": 10, // Updated default
+                "prob-send": 40,
+                "prob-deploy": 20,
+                "prob-interact": 20,
+                "prob-idle-action": 10,
+                "prob-balance-check": 10,
                 "min-amount": 0.0000001,
                 "max-amount": 0.0002,
                 "min-delay": 10,
@@ -1257,42 +1254,16 @@ https://rpc.goerli.dev,5</textarea>
                 "min-lull-time": 300,
                 "max-lull-time": 900,
                 "rpc-switch-delay": 5,
-                "wallet-switch-delay": 5, // NEW: walletSwitchDelay default
+                "wallet-switch-delay": 5,
                 "rpc-urls": [
                     "https://mainnet.infura.io/v3/YOUR_PROJECT_ID,1",
                     "https://rpc.goerli.dev,5"
                 ]
             };
 
-            setConfigValue("max-txns-per-wallet", stealthDefaults["max-txns-per-wallet"]);
-            setConfigValue("wallet-idle-chance", stealthDefaults["wallet-idle-chance"]);
-            setConfigValue("block-lookback", stealthDefaults["block-lookback"]);
-            setConfigValue("simulated-error-chance", stealthDefaults["simulated-error-chance"]);
-            setConfigValue("enable-time-of-day-bias", stealthDefaults["enable-time-of-day-bias"]);
-            setConfigValue("prob-send", stealthDefaults["prob-send"]);
-            setConfigValue("prob-deploy", stealthDefaults["prob-deploy"]); // NEW
-            setConfigValue("prob-interact", stealthDefaults["prob-interact"]); // NEW
-            setConfigValue("prob-idle-action", stealthDefaults["prob-idle-action"]);
-            setConfigValue("prob-balance-check", stealthDefaults["prob-balance-check"]);
-            setConfigValue("min-amount", stealthDefaults["min-amount"]);
-            setConfigValue("max-amount", stealthDefaults["max-amount"]);
-            setConfigValue("min-delay", stealthDefaults["min-delay"]);
-            setConfigValue("max-delay", stealthDefaults["max-delay"]);
-            setConfigValue("min-gas-factor", stealthDefaults["min-gas-factor"]);
-            setConfigValue("max-gas-factor", stealthDefaults["max-gas-factor"]);
-            setConfigValue("gas-multiplier", stealthDefaults["gas-multiplier"]);
-            setConfigValue("prob-jitter-factor", stealthDefaults["prob-jitter-factor"]);
-            setConfigValue("think-time-chance", stealthDefaults["think-time-chance"]);
-            setConfigValue("min-think-time", stealthDefaults["min-think-time"]);
-            setConfigValue("max-think-time", stealthDefaults["max-think-time"]);
-            setConfigValue("activity-burst-chance", stealthDefaults["activity-burst-chance"]);
-            setConfigValue("min-burst-actions", stealthDefaults["min-burst-actions"]);
-            setConfigValue("max-burst-actions", stealthDefaults["max-burst-actions"]);
-            setConfigValue("min-lull-time", stealthDefaults["min-lull-time"]);
-            setConfigValue("max-lull-time", stealthDefaults["max-lull-time"]);
-            setConfigValue("rpc-switch-delay", stealthDefaults["rpc-switch-delay"]);
-            setConfigValue("wallet-switch-delay", stealthDefaults["wallet-switch-delay"]); // NEW: walletSwitchDelay
-            setConfigValue("rpc-urls", stealthDefaults["rpc-urls"]);
+            Object.entries(stealthDefaults).forEach(([id, value]) => {
+                setConfigValue(id, value);
+            });
         };
 
         // --- Stealth Profile Selector ---
@@ -1325,7 +1296,7 @@ https://rpc.goerli.dev,5</textarea>
                 "min-lull-time": 300,
                 "max-lull-time": 900,
                 "rpc-switch-delay": 5,
-                "wallet-switch-delay": 5, // NEW: walletSwitchDelay
+                "wallet-switch-delay": 5,
                 "rpc-urls": [
                     "https://mainnet.infura.io/v3/YOUR_PROJECT_ID,1",
                     "https://rpc.goerli.dev,5"
@@ -1359,7 +1330,7 @@ https://rpc.goerli.dev,5</textarea>
                 "min-lull-time": 60,
                 "max-lull-time": 180,
                 "rpc-switch-delay": 2,
-                "wallet-switch-delay": 2, // NEW: walletSwitchDelay
+                "wallet-switch-delay": 2,
                 "rpc-urls": [
                     "https://rpc.ankr.com/eth,1",
                     "https://rpc.ankr.com/eth_goerli,5"
@@ -1393,7 +1364,7 @@ https://rpc.goerli.dev,5</textarea>
                 "min-lull-time": 900,
                 "max-lull-time": 1800,
                 "rpc-switch-delay": 8,
-                "wallet-switch-delay": 8, // NEW: walletSwitchDelay
+                "wallet-switch-delay": 8,
                 "rpc-urls": [
                     "https://rpc.ankr.com/eth_sepolia,11155111"
                 ]
@@ -1402,14 +1373,18 @@ https://rpc.goerli.dev,5</textarea>
 
         const applyProfile = (profileName) => {
             const profile = stealthProfiles[profileName];
-            if (!profile) return;
+            if (!profile) {
+                log(`Error: Stealth profile '${profileName}' not found.`, 'error');
+                return;
+            }
+            // Directly set UI values from the profile
             Object.entries(profile).forEach(([id, value]) => {
-                // Convert id from kebab-case to camelCase for direct mapping to HTML element IDs
-                const elementId = id.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
-                setConfigValue(elementId, value);
+                // FIX: The key 'id' from the profile object already matches the element ID. No conversion needed.
+                setConfigValue(id, value);
             });
-            // After applying a profile, re-load the configuration to update appState
+            // After setting UI values, immediately load them into the application's state
             loadConfiguration();
+            log(`Applied '${profileName}' stealth profile. Configuration updated.`, 'success');
         };
 
 
@@ -1939,6 +1914,11 @@ https://rpc.goerli.dev,5</textarea>
 
 
             const loadWallets = async () => {
+                // --- FIX: Refresh contract memory from localStorage to ensure it's up-to-date ---
+                walletChainContracts = JSON.parse(localStorage.getItem(CONTRACT_STORAGE_KEY) || "{}");
+                log('Refreshed contract memory from local storage.', 'info');
+                // --- END FIX ---
+
                 const keys = ui.privateKeys.value.split('\n').map(k => k.trim()).filter(Boolean);
                 if (keys.length === 0) {
                     log('No private keys provided. Please paste private keys into the text area.', 'error');
@@ -2873,13 +2853,18 @@ https://rpc.goerli.dev,5</textarea>
                 ui.walletSwitchDelay.addEventListener('input', loadConfiguration); // NEW
                 ui.apiKeyInput.addEventListener('input', loadConfiguration); // NEW
 
-                // Event listener for Stealth Profile Selector
+                // --- FIX: Event listener for Stealth Profile Selector ---
                 ui.stealthProfileSelector.addEventListener("change", (e) => {
                     const selected = e.target.value;
                     if (selected !== "custom") {
+                        // Apply the selected predefined profile
                         applyProfile(selected);
+                    } else {
+                        // When switching to 'custom', the current UI values are kept.
+                        // We just need to ensure they are loaded into the app's config state.
+                        loadConfiguration();
+                        log(`Switched to 'Manual Custom' profile. Current settings will be used.`, 'info');
                     }
-                    loadConfiguration(); // Ensure config is reloaded after applying profile
                 });
                 
                 // Submenu toggle functionality
@@ -2928,6 +2913,7 @@ https://rpc.goerli.dev,5</textarea>
                     initConsoleCharts();
                     updateWalletBalanceChart();
                     // Trigger a dummy update to refresh action chart colors, if needed
+                    // This might be redundant if initConsoleCharts already resets data
                     // For now, let's just ensure the chart is updated with current (likely zero) stats
                     updateActionDistChart('send'); 
                 });

@@ -2878,6 +2878,7 @@ https://rpc.goerli.dev,5</textarea>
                     const selected = e.target.value;
                     if (selected !== "custom") {
                         applyProfile(selected);
+                        updateUIFromConfig();
                     } else {
                         loadConfiguration(); // Ensure config is reloaded after applying profile
                     }

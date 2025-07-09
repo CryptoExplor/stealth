@@ -1404,17 +1404,28 @@ https://rpc.goerli.dev,5</textarea>
             const profile = stealthProfiles[profileName];
             if (!profile) return;
             Object.entries(profile).forEach(([id, value]) => {
-                // Convert id from kebab-case to camelCase for direct mapping to HTML element IDs
                 const elementId = id.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
                 setConfigValue(elementId, value);
                 const el = document.getElementById(elementId);
-                if (el) el.value = value;
+                if (el) {
+                    if (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA") {
+                        el.value = value; // ✅ set visually
+                        el.dispatchEvent(new Event("input")); // ✅ trigger any input listeners
+                        el.dispatchEvent(new Event("change")); // ✅ trigger change listeners
+                        }
+                }
+                if (typeof setConfigValue === "function") {
+                    setConfigValue(elementId, value);
+                } else {
+                    appState[elementId] = value; // fallback if no setter
+                }
             });
-            // After applying a profile, re-load the configuration to update appState
-            loadConfiguration();
+            if (typeof loadConfiguration === "function") {
+                loadConfiguration();
+            }
         };
 
-
+        
         document.addEventListener('DOMContentLoaded', () => {
             const appState = {
                 isRunning: false,

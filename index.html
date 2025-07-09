@@ -1407,6 +1407,8 @@ https://rpc.goerli.dev,5</textarea>
                 // Convert id from kebab-case to camelCase for direct mapping to HTML element IDs
                 const elementId = id.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
                 setConfigValue(elementId, value);
+                const el = document.getElementById(elementId);
+                if (el) el.value = value;
             });
             // After applying a profile, re-load the configuration to update appState
             loadConfiguration();

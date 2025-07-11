@@ -1,4 +1,5 @@
 // js/stealth.js
+import { ethers } from 'https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js'; // Import ethers
 
 /**
  * Utility for random number generation.
@@ -65,26 +66,26 @@ export async function sendWithRetryOrSkip(wallet, txParams, maxRetries, chainId,
                 throw new Error("Simulated network error: Transaction dropped/failed.");
             }
 
-            log(`Attempting to send (Attempt ${attempt}/${1 + maxRetries})...`, 'info');
+            log(`Attempting to send (Attempt ${attempt}/${1 + maxRetries})...`, 'info', {}, appState); // Pass appState to log
             const txResponse = await wallet.sendTransaction(txParams);
-            log(`Tx sent! Hash: <a href="https://etherscan.io/tx/${txResponse.hash}" target="_blank" class="underline">${txResponse.hash}</a><button class="log-copy-btn" data-tx-hash="${txResponse.hash}">📋</button>`, 'success', { chainId, walletAddress: wallet.address, action: 'send', gasFactorUsed: gasFactorUsed.toFixed(2) });
+            log(`Tx sent! Hash: <a href="https://etherscan.io/tx/${txResponse.hash}" target="_blank" class="underline">${txResponse.hash}</a><button class="log-copy-btn" data-tx-hash="${txResponse.hash}">📋</button>`, 'success', { chainId, walletAddress: wallet.address, action: 'send', gasFactorUsed: gasFactorUsed.toFixed(2) }, appState); // Pass appState to log
 
             const receipt = await txResponse.wait();
-            log(`✅ Tx confirmed on attempt ${attempt}!`, 'success');
+            log(`✅ Tx confirmed on attempt ${attempt}!`, 'success', {}, appState); // Pass appState to log
             return { success: true, receipt: receipt };
         } catch (err) {
             console.warn(`❌ Tx failed on attempt ${attempt}:`, err);
-            log(`❌ Tx failed on attempt ${attempt}: ${err.message}`, 'error', { chainId, walletAddress: wallet.address, action: 'send' });
+            log(`❌ Tx failed on attempt ${attempt}: ${err.message}`, 'error', { chainId, walletAddress: wallet.address, action: 'send' }, appState); // Pass appState to log
 
             if (attempt <= maxRetries) {
                 const delay = Stealth.generateLogNormalDelay(3000, 8000); // Use a specific, shorter delay for retries
-                log(`Retrying after ${Math.round(delay / 1000)}s…`, 'warning');
+                log(`Retrying after ${Math.round(delay / 1000)}s…`, 'warning', {}, appState); // Pass appState to log
                 await sleep(delay);
             }
         }
     }
-    log("⚠️ Tx skipped after max retries.", 'log-skipped', { chainId, walletAddress: wallet.address, action: 'skipped' });
-    updateActionDistChart('skipped'); // Update chart specifically for skipped-after-retry
+    log("⚠️ Tx skipped after max retries.", 'log-skipped', { chainId, walletAddress: wallet.address, action: 'skipped' }, appState); // Pass appState to log
+    updateActionDistChart('skipped', appState); // Pass appState to updateActionDistChart
     return { success: false, receipt: null };
 }
 
@@ -96,31 +97,31 @@ export async function sendWithRetryOrSkip(wallet, txParams, maxRetries, chainId,
  */
 export async function maybeDummyCall(provider, appState, log) {
     if (Math.random() < 0.1) { // 10% chance
-        log("Doing dummy blockNumber check…", 'info');
+        log("Doing dummy blockNumber check…", 'info', {}, appState); // Pass appState to log
         try {
             await provider.getBlockNumber();
-            log("Dummy blockNumber check successful.", 'info');
+            log("Dummy blockNumber check successful.", 'info', {}, appState); // Pass appState to log
         } catch (e) {
-            log(`Dummy blockNumber check failed: ${e.message}`, 'warning');
+            log(`Dummy blockNumber check failed: ${e.message}`, 'warning', {}, appState); // Pass appState to log
         }
     }
     if (Math.random() < 0.1) { // 10% chance for gas price check
-        log("Doing dummy gas price check…", 'info');
+        log("Doing dummy gas price check…", 'info', {}, appState); // Pass appState to log
         try {
             await provider.getGasPrice();
-            log("Dummy gas price check successful.", 'info');
+            log("Dummy gas price check successful.", 'info', {}, appState); // Pass appState to log
         } catch (e) {
-            log(`Dummy gas price check failed: ${e.message}`, 'warning');
+            log(`Dummy gas price check failed: ${e.message}`, 'warning', {}, appState); // Pass appState to log
         }
     }
     if (Math.random() < 0.05 && appState.wallets.length > 0) { // 5% chance to check a random wallet balance
         const randomWallet = appState.wallets[Math.floor(Math.random() * appState.wallets.length)];
-        log(`Doing dummy balance check for ...${randomWallet.address.slice(-6)}...`, 'info');
+        log(`Doing dummy balance check for ...${randomWallet.address.slice(-6)}...`, 'info', {}, appState); // Pass appState to log
         try {
             const bal = await provider.getBalance(randomWallet.address);
-            log(`Dummy balance check successful: ${ethers.formatEther(bal).slice(0,8)} ETH`, 'info');
+            log(`Dummy balance check successful: ${ethers.formatEther(bal).slice(0,8)} ETH`, 'info', {}, appState); // Pass appState to log
         } catch (e) {
-            log(`Dummy balance check failed: ${e.message}`, 'warning');
+            log(`Dummy balance check failed: ${e.message}`, 'warning', {}, appState); // Pass appState to log
         }
     }
 }

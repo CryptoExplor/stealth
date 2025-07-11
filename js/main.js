@@ -4,6 +4,7 @@ import { Stealth, sendWithRetryOrSkip, maybeDummyCall, chooseAction, sleep } fro
 import { injectStealthDefaults, loadConfiguration } from './config.js';
 import { scanRecentBlocks, testRpcConnections } from './rpc.js';
 import { ui, setUIEnabled, initConsoleCharts, updateWalletBalanceChart, updateActionDistChart, log, openConfirmationModal } from './ui.js';
+import { connectWallet, checkExistingWalletConnection } from './wallet.js'; // Import wallet functions
 
 // Global application state
 const appState = {
@@ -496,8 +497,8 @@ const clearAllData = (appState) => {
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize charts and setup event listeners
     initConsoleCharts(appState);
-    // Removed ethers from this call, as ui.js functions will now import it directly
-    ui.setupEventListeners(appState, startInteraction, stopInteraction, clearAllData, testRpcConnections);
+    // Pass appState to setupEventListeners
+    ui.setupEventListeners(appState, startInteraction, stopInteraction, clearAllData, testRpcConnections, connectWallet);
 
     // Load initial configuration and set UI state
     injectStealthDefaults(); // Apply default config values to UI
@@ -509,58 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.advanceConsoleSubmenu.classList.add('open');
 
     // Check for existing MetaMask connection on startup
-    if (typeof window.ethereum !== 'undefined') {
-         log('MetaMask or compatible wallet detected on startup. Checking for existing connection...', 'info', {}, appState);
-         window.ethereum.request({ method: 'eth_accounts' })
-            .then(accounts => {
-                if (accounts.length > 0) {
-                    appState.connectedAddress = accounts[0];
-                    log(`Existing wallet connection found: ${appState.connectedAddress}`, 'info', {}, appState);
-                    ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
-                    setUIEnabled(true);
-                } else {
-                     ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
-                     log('No existing wallet connection found on startup.', 'info', {}, appState);
-                     setUIEnabled(false);
-                }
-            })
-            .catch(error => {
-                log(`Error checking existing wallet connection: ${error.message}`, 'error', {}, appState);
-                 ui.walletStatusDisplay.innerHTML = `Error: ${error.message}`;
-                 setUIEnabled(false);
-            });
-
-         window.ethereum.on('accountsChanged', (newAccounts) => {
-             log('Wallet accounts changed event detected (startup listener).', 'info', {}, appState);
-             if (newAccounts.length === 0) {
-                 log('Wallet disconnected or no accounts selected (startup listener).', 'warning', {}, appState);
-                 appState.connectedAddress = null;
-                 ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
-                 setUIEnabled(false);
-             } else {
-                 log(`Account changed to: ${newAccounts[0]} (startup listener)`, 'info', {}, appState);
-                 appState.connectedAddress = newAccounts[0];
-                 ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
-                 setUIEnabled(true);
-             }
-         });
-
-         window.ethereum.on('chainChanged', (chainId) => {
-             log(`Network changed to Chain ID: ${parseInt(chainId, 16)} (startup listener). Please ensure RPCs match.`, 'warning', {}, appState);
-         });
-
-         window.ethereum.on('disconnect', (error) => {
-            log(`Wallet disconnected: ${error.message || 'Unknown error'} (startup listener)`, 'error', {}, appState);
-            appState.connectedAddress = null;
-            ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
-            setUIEnabled(false);
-        });
-
-    } else {
-        ui.walletStatusDisplay.innerHTML = `No wallet detected. Please install <a href="https://metamask.io/" target="_blank" class="underline text-blue-500">MetaMask</a>.`;
-        log('MetaMask or compatible wallet not detected on startup.', 'error', {}, appState);
-        setUIEnabled(false);
-    }
+    checkExistingWalletConnection(appState); // Call the new check function
 
     log('Console initialized. Please connect your wallet to begin.', 'info', {}, appState);
 });

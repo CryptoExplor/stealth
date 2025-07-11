@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advance Interactive Script Console</title>
+    <!-- Google AdSense Account Meta Tag (Recommended in <head>) -->
+    <meta name="google-adsense-account" content="ca-pub-3062851685354753">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Base styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f1eb; /* Warm Beige */
+            color: #212529; /* Dark Gray for infographic text */
+        }
+
+        /* Dark mode styles */
+        html.dark body {
+            background-color: #1a202c; /* Dark Slate */
+            color: #e2e8f0; /* Light Gray */
+        }
+
+        /* Console specific styles - Light Mode */
+        .bg-primary { background-color: #f4f1eb; }
+        .bg-secondary { background-color: #ffffff; }
+        .text-main { color: #2d3748; } /* Slate 800 */
+        .text-accent { color: #4a5568; } /* Slate 600 */
+        .border-accent { border-color: #e2e8f0; /* Slate 200 */ }
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-secondary { background-color: #6b7280; color: white; }
+        .btn-secondary:hover { background-color: #4b5563; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-success { background-color: #22c55e; color: white; }
+        .btn-success:hover { background-color: #16a34a; }
+        .btn-llm { background-color: #e0f2fe; color: #0284c7; } /* Light blue for LLM buttons */
+        .btn-llm:hover { background-color: #bae6fd; }
+
+        /* Console specific styles - Dark Mode */
+        html.dark .bg-primary { background-color: #1a202c; }
+        html.dark .bg-secondary { background-color: #2d3748; }
+        html.dark .text-main { color: #e2e8f0; } /* Light Gray */
+        html.dark .text-accent { color: #a0aec0; } /* Gray 400 */
+        html.dark .border-accent { border-color: #4a5568; /* Slate 600 */ }
+        html.dark .btn-primary { background-color: #4299e1; color: white; }
+        html.dark .btn-primary:hover { background-color: #3182ce; }
+        html.dark .btn-secondary { background-color: #718096; color: white; }
+        html.dark .btn-secondary:hover { background-color: #5a67d8; }
+        html.dark .btn-danger { background-color: #fc8181; color: white; }
+        html.dark .btn-danger:hover { background-color: #e53e3e; }
+        html.dark .btn-success { background-color: #68d391; color: white; }
+        html.dark .btn-success:hover { background-color: #38a169; }
+        html.dark .btn-llm { background-color: #90cdf4; color: #1a202c; } /* Lighter blue for LLM buttons */
+        html.dark .btn-llm:hover { background-color: #63b3ed; }
+
+        /* Chart container for console charts */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 40vh;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        #live-log {
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log-success { color: #22c55e; }
+        .log-error { color: #ef4444; }
+        .log-info { color: #3b82f6; }
+        .log-warning { color: #f59e0b; }
+        .log-skipped { color: #a8a29e; }
+        html.dark .log-success { color: #68d391; }
+        html.dark .log-error { color: #fc8181; }
+        html.dark .log-info { color: #90cdf4; }
+        html.dark .log-warning { color: #fbd38d; }
+        html.dark .log-skipped { color: #cbd5e0; }
+
+        .log-copy-btn {
+            background: none;
+            border: none;
+            color: #a8a29e; /* Gray */
+            cursor: pointer;
+            font-size: 0.8em;
+            margin-left: 5px;
+            padding: 0 3px;
+            vertical-align: middle;
+            transition: color 0.2s;
+        }
+        .log-copy-btn:hover {
+            color: #e2e8f0; /* Lighter gray on hover */
+        }
+        html.dark .log-copy-btn { color: #a0aec0; }
+        html.dark .log-copy-btn:hover { color: #e2e8f0; }
+
+
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip-container .tooltip-text {
+            visibility: hidden;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 10px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%; /* Position above the text */
+            left: 50%;
+            margin-left: -75px; /* Center the tooltip */
+            opacity: 0;
+            transition: opacity 0.3s;
+            width: 150px;
+        }
+
+        .tooltip-container .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%; /* At the bottom of the tooltip */
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        html.dark .modal-content {
+            background-color: #2d3748;
+            border-color: #4a5568;
+        }
+        .close-button, .close-qr-button, .close-confirm-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus,
+        .close-qr-button:hover,
+        .close-qr-button:focus,
+        .close-confirm-button:hover,
+        .close-confirm-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        html.dark .close-button, html.dark .close-qr-button, html.dark .close-confirm-button {
+            color: #cbd5e0;
+        }
+        html.dark .close-button:hover, html.dark .close-button:focus,
+        html.dark .close-qr-button:hover, html.dark .close-qr-button:focus,
+        html.dark .close-confirm-button:hover, html.dark .close-confirm-button:focus {
+            color: #e2e8f0;
+        }
+
+        .modal-loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        html.dark .modal-loader {
+            border-color: #4a5568;
+            border-top-color: #4299e1;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Disabled styles for fields */
+        .wallet-feature-control:disabled,
+        .wallet-feature-control[disabled] {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background-color: #e2e8f0; /* Light gray */
+        }
+        html.dark .wallet-feature-control:disabled,
+        html.dark .wallet-feature-control[disabled] {
+            background-color: #4a5568; /* Darker gray */
+            color: #cbd5e0;
+        }
+
+        /* --- MODIFIED: Hover-expanding Sidebar Navigation --- */
+        #sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 80px; /* Collapsed width */
+            background-color: #ffffff; /* White background */
+            color: #2d3748; /* Dark text color */
+            padding-top: 1rem;
+            transition: width 0.3s ease-in-out;
+            z-index: 50;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1); /* Softer shadow */
+            overflow-x: hidden; /* Hide overflowing content */
+            border-right: 1px solid #e2e8f0; /* Add a subtle border */
+        }
+        html.dark #sidebar {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+            border-right: 1px solid #4a5568;
+        }
+
+        #sidebar:hover {
+            width: 250px; /* Expanded width */
+        }
+        
+        #sidebar .logo-container {
+            transition: justify-content 0.3s ease-in-out;
+        }
+        #sidebar:hover .logo-container {
+            justify-content: flex-start;
+        }
+
+        #sidebar .nav-link, #sidebar .submenu-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 1.5rem;
+            color: #4a5568;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background-color 0.2s ease, color 0.2s ease, justify-content 0.3s ease-in-out;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        html.dark #sidebar .nav-link, html.dark #sidebar .submenu-toggle {
+            color: #a0aec0;
+        }
+        html.dark #sidebar .nav-link:hover, html.dark #sidebar .submenu-toggle:hover {
+            background-color: #4a5568;
+            color: #e2e8f0;
+        }
+        html.dark #sidebar .nav-link.active, html.dark #sidebar .submenu-toggle.active {
+            background-color: #4299e1;
+            color: white;
+        }
+        
+        #sidebar:hover .nav-link, #sidebar:hover .submenu-toggle {
+            justify-content: flex-start;
+        }
+
+        #sidebar .nav-link i, #sidebar .submenu-toggle i {
+            min-width: 24px;
+            text-align: center;
+            font-size: 1.25rem;
+        }
+
+        #sidebar .nav-text {
+            opacity: 0;
+            max-width: 0;
+            overflow: hidden;
+            white-space: nowrap;
+            margin-left: 0;
+            transition: opacity 0.2s ease-in-out, max-width 0.3s ease-in-out, margin-left 0.3s ease-in-out;
+            transition-delay: 0.1s;
+        }
+
+        #sidebar:hover .nav-text {
+            opacity: 1;
+            max-width: 200px; /* Allow text to appear */
+            margin-left: 0.75rem;
+        }
+
+        /* Submenu styles */
+        .submenu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+            background-color: #f8fafc; /* Slightly different bg for submenu */
+        }
+        html.dark .submenu {
+            background-color: #1a202c;
+        }
+        
+        .submenu.open {
+            max-height: 500px; /* Large enough to show all items */
+        }
+
+        .submenu .nav-link {
+            padding-left: 3.5rem; /* Indent submenu items */
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        
+        .submenu-toggle .fa-chevron-down {
+            margin-left: auto;
+            transition: transform 0.3s ease;
+        }
+        
+        .submenu-toggle.active .fa-chevron-down {
+            transform: rotate(180deg);
+        }
+
+        header, main, footer {
+            margin-left: 80px;
+            transition: margin-left 0.3s ease-in-out;
+        }
+
+        #sidebar:hover ~ header,
+        #sidebar:hover ~ main,
+        #sidebar:hover ~ footer {
+            margin-left: 250px;
+        }
+
+        /* Dropdown for download log */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        html.dark .dropdown-content {
+            background-color: #2d3748;
+        }
+
+        .dropdown-content button {
+            color: #2d3748;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: left;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        html.dark .dropdown-content button {
+            color: #e2e8f0;
+        }
+
+        .dropdown-content button:hover {
+            background-color: #f1f1f1;
+        }
+        html.dark .dropdown-content button:hover {
+            background-color: #4a5568;
+        }
+
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+    </style>
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+</head>
+<body class="bg-primary text-main">
+    <!-- Google AdSense Script (Recommended right after <body> tag) -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3062851685354753"
+     crossorigin="anonymous"></script>
+
+    <!-- Sidebar Navigation -->
+    <div id="sidebar">
+        <div class="p-4 mt-8 flex items-center justify-center logo-container">
+            <img src="https://d.cess.network/n1/1075188011.png" alt="FarmLabs Logo" class="h-10 w-10 rounded-full">
+            <h2 class="text-xl font-bold text-gray-800 nav-text">FarmLabs</h2>
+        </div>
+        <nav class="flex flex-col mt-4">
+            <a href="index.html" class="nav-link"><i class="fas fa-home"></i><span class="nav-text">Home</span></a>
+            
+            <!-- Basic Console Link (Activated) -->
+            <a href="basic.html" class="nav-link"><i class="fas fa-terminal"></i><span class="nav-text">Basic Console</span></a>
+
+            <!-- Advance Console Submenu -->
+            <div>
+                <div id="advance-console-toggle" class="submenu-toggle">
+                    <i class="fas fa-tools"></i>
+                    <span class="nav-text">Advance Console</span>
+                    <i class="fas fa-chevron-down text-xs nav-text"></i>
+                </div>
+                <div id="advance-console-submenu" class="submenu">
+                    <a href="#dashboard" class="nav-link" data-section="dashboard"><i class="fas fa-tachometer-alt"></i><span class="nav-text">Dashboard</span></a>
+                    <a href="#wallets" class="nav-link" data-section="wallets"><i class="fas fa-wallet"></i><span class="nav-text">Wallets</span></a>
+                    <a href="#recipient-settings" class="nav-link" data-section="recipients"><i class="fas fa-users"></i><span class="nav-text">Recipients</span></a>
+                    <a href="#config" class="nav-link" data-section="configuration"><i class="fas fa-cogs"></i><span class="nav-text">Configuration</span></a>
+                    <a href="#log" class="nav-link" data-section="live-log"><i class="fas fa-stream"></i><span class="nav-text">Live Log</span></a>
+                </div>
+            </div>
+
+            <hr class="border-gray-300 my-2 mx-4">
+            <a href="infographic.html" class="nav-link"><i class="fas fa-chart-pie"></i><span class="nav-text">Infographic</span></a>
+            <a href="doc.html" class="nav-link"><i class="fas fa-file-alt"></i><span class="nav-text">Documentation</span></a>
+        </nav>
+    </div>
+
+    <header class="bg-secondary shadow-md sticky top-0 z-20">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <!-- Header Title -->
+                    <h1 class="text-xl md:text-2xl font-bold text-main ml-4">Advance Interactive Script Console</h1>
+                </div>
+
+                <!-- Right-side icons -->
+                <div class="flex items-center space-x-4">
+                     <a href="https://farm-labs.blogspot.com/" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-blue-500" title="Farm Labs Blog">
+                        <i class="fab fa-blogger text-xl"></i>
+                    </a>
+                    <a href="https://t.me/farm_lab" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-blue-500" title="Farm Lab Telegram">
+                        <i class="fab fa-telegram text-xl"></i>
+                    </a>
+                    <a href="https://github.com/CryptoExplor/farmlabs" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-blue-500" title="Farm Labs GitHub">
+                        <i class="fab fa-github text-xl"></i>
+                    </a>
+                    <!-- Dark Mode Toggle -->
+                    <button id="theme-toggle" class="text-accent hover:text-blue-500 p-2 rounded-full transition-colors duration-200" title="Toggle Dark Mode">
+                        <i class="fas fa-moon text-xl" id="theme-toggle-icon"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="p-4 sm:p-6 lg:p-8">
+        <div class="container mx-auto">
+            <h2 class="text-3xl md:text-4xl font-extrabold text-center mb-6" style="color: #0077B6;">Farm smarter, not harder — with FarmLabs.</h2>
+
+            <!-- Script Console Content -->
+            <div id="script-console-content">
+                <div id="security-warning" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-8 rounded-r-lg" role="alert">
+                    <p class="font-bold">Security Warning</p>
+                    <p>Pasting your private keys or sensitive contract ABIs into a website is extremely risky and can result in loss of funds. This application is a client-side tool for demonstration purposes only. Use it with test keys and on test networks. Never use it with mainnet keys holding real assets.</p>
+                </div>
+
+                <!-- Dashboard Section -->
+                <section id="dashboard" class="mb-12">
+                    <h2 class="text-3xl font-bold mb-2 text-main">Dashboard</h2>
+                    <p class="text-accent mb-6">Start, stop, and monitor the Blockchain Interaction process from here, with real-time updates on wallet balances and action distribution.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-secondary p-6 rounded-lg shadow-md flex flex-col items-center justify-center space-y-4">
+                            <button id="connect-wallet-btn" class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 btn-success">🔗 Connect Wallet</button>
+                            <div id="wallet-status-display" class="text-center text-sm font-medium text-main">
+                                No wallet connected.
+                            </div>
+                            <button id="start-btn" class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 btn-primary wallet-feature-control" disabled>▶️ Start Interaction</button>
+                            <button id="stop-btn" class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 btn-danger wallet-feature-control" disabled>⏹️ Stop Interaction</button>
+                            <button id="clear-all-data-btn" class="w-full py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-secondary wallet-feature-control" disabled>🗑️ Clear All Data</button>
+                        </div>
+                         <div class="bg-secondary p-6 rounded-lg shadow-md col-span-1 md:col-span-2">
+                            <h3 class="font-bold text-lg mb-4 text-main">Live Status</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="text-sm font-medium text-accent">Total Actions Performed</span>
+                                        <span id="progress-text" class="text-sm font-medium text-accent">0</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-4">
+                                        <div id="progress-bar" class="bg-blue-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                                    <div class="p-3 bg-blue-50 rounded-lg">
+                                        <div class="text-xs text-blue-500 font-bold uppercase">Status</div>
+                                        <div id="status-display" class="text-lg font-semibold text-main">Idle</div>
+                                    </div>
+                                    <div class="p-3 bg-green-50 rounded-lg">
+                                        <div class="text-xs text-green-500 font-bold uppercase">Successful Actions</div>
+                                        <div id="success-count" class="text-lg font-semibold text-main">0</div>
+                                    </div>
+                                    <div class="p-3 bg-red-50 rounded-lg">
+                                        <div class="text-xs text-red-500 font-bold uppercase">Failed Actions</div>
+                                        <div id="fail-count" class="text-lg font-semibold text-main">0</div>
+                                    </div>
+                                    <div class="p-3 bg-gray-100 rounded-lg">
+                                        <div class="text-xs text-gray-500 font-bold uppercase">Current Gas</div>
+                                        <div id="gas-display" class="text-lg font-semibold text-main">N/A</div>
+                                    </div>
+                                </div>
+                                <!-- NEW: Last Human-like Spike Indicator -->
+                                <div class="p-3 bg-purple-50 rounded-lg text-center">
+                                    <div class="text-xs text-purple-500 font-bold uppercase">Last Human-like Spike</div>
+                                    <div id="human-spike-display" class="text-lg font-semibold text-main">Never</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="bg-secondary p-6 rounded-lg shadow-md lg:col-span-2">
+                            <h3 class="font-bold text-lg mb-4 text-main">Wallet Balances (ETH)</h3>
+                            <p class="text-sm text-accent mb-4">This chart shows the current balance of each loaded wallet, dynamically updating after transactions.</p>
+                            <div class="chart-container">
+                                <canvas id="wallet-balance-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-secondary p-6 rounded-lg shadow-md">
+                            <h3 class="font-bold text-lg mb-4 text-main">Action Distribution</h3>
+                            <p class="text-sm text-accent mb-4">Visualizes the types of actions performed (send, idle).</p>
+                            <div class="chart-container">
+                                <canvas id="action-dist-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Wallet Section -->
+                <section id="wallets" class="mb-12">
+                    <h2 class="text-3xl font-bold mb-2 text-main">Wallets</h2>
+                    <p class="text-accent mb-6">Load your source wallets by pasting private keys below. Ensure you have sufficient balance for transactions.</p>
+                    <div class="bg-secondary p-8 rounded-lg shadow-md mb-8">
+                        <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-3 mb-4 rounded-r-lg" role="alert">
+                            <p class="font-bold text-sm">Important Security Reminder:</p>
+                            <p class="text-xs italic">Only use test keys on testnets for this application. Never use mainnet private keys holding real funds.</p>
+                        </div>
+                        <label for="private-keys" class="block font-medium mb-1 text-accent">Private Keys (one per line)</label>
+                        <textarea id="private-keys" rows="5" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition font-mono text-sm wallet-feature-control" disabled></textarea>
+                        <button id="load-keys-btn" class="mt-4 w-full py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-secondary wallet-feature-control" disabled>Load Wallets & Check Balances</button>
+                        <p id="keys-loaded-count" class="text-sm text-green-600 mt-2 font-medium"></p>
+                    </div>
+
+                    <h3 class="text-2xl font-bold mb-2 text-main">Loaded Wallets</h3>
+                    <p class="text-accent mb-6">Overview of all wallets currently loaded in the application.</p>
+                    <div class="bg-secondary p-6 rounded-lg shadow-md">
+                        <ul id="wallet-list-display" class="list-disc pl-5 space-y-2 text-sm text-accent">
+                            <li id="no-wallets-msg">No wallets loaded yet.</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- Recipient Section - Kept separate for clarity on dynamic scanning -->
+                <section id="recipient-settings" class="mb-12">
+                    <h2 class="text-3xl font-bold mb-2 text-main">Recipient Settings</h2>
+                    <p class="text-accent mb-6">Choose how the script will select destination addresses for transactions.</p>
+                    <div class="bg-secondary p-8 rounded-lg shadow-md">
+                        <div class="space-y-4">
+                            <label class="flex items-center">
+                                <input type="radio" name="recipient-mode" value="pool" class="form-radio h-5 w-5 text-blue-600 wallet-feature-control" checked disabled>
+                                <span class="ml-3 text-main">Use Dynamically Scanned Pool</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="recipient-mode" value="fixed" class="form-radio h-5 w-5 text-blue-600 wallet-feature-control" disabled>
+                                <span class="ml-3 text-main">Use Fixed Address</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="recipient-mode" value="list" class="form-radio h-5 w-5 text-blue-600 wallet-feature-control" disabled>
+                                <span class="ml-3 text-main">Use Custom List of Addresses (one per line)</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="recipient-mode" value="predefined" class="form-radio h-5 w-5 text-blue-600 wallet-feature-control" disabled>
+                                <span class="ml-3 text-main">Use Predefined List of Addresses (from CSV)</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="recipient-mode" value="self-interact" class="form-radio h-5 w-5 text-blue-600 wallet-feature-control" disabled>
+                                <span class="ml-3 text-main">Use Loaded Wallets to Interact with Each Other</span>
+                            </label>
+                        </div>
+
+                        <div id="fixed-address-section" class="mt-4 hidden">
+                            <label for="fixed-address" class="block font-medium mb-1 text-accent">Fixed Recipient Address</label>
+                            <input type="text" id="fixed-address" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition font-mono text-sm wallet-feature-control" placeholder="0x..." disabled>
+                        </div>
+
+                        <div id="list-addresses-section" class="mt-4 hidden">
+                            <label for="list-addresses" class="block font-medium mb-1 text-accent">Recipient Addresses (one per line)</label>
+                            <textarea id="list-addresses" rows="5" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition font-mono text-sm wallet-feature-control" placeholder="0x...&#10;0x...&#10;... (one address per line)" disabled></textarea>
+                            <button id="load-addresses-from-list-btn" class="mt-4 w-full py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-secondary wallet-feature-control" disabled>Load Addresses from List</button>
+                            <p id="list-addresses-count" class="text-sm text-green-600 mt-2 font-medium"></p>
+                        </div>
+
+                        <div id="predefined-addresses-section" class="mt-4 hidden">
+                            <p class="block font-medium mb-1 text-accent">Download list here:</p>
+                            <ul class="list-disc pl-5 mb-4 text-sm text-blue-700">
+                                <li><a href="https://d.cess.network/n1/812192221.csv" target="_blank" class="hover:underline">Link 1 (recipients1)</a></li>
+                                <li><a href="https://d.cess.network/n1/1394676302.csv" target="_blank" class="hover:underline">Link 2 (recipients2)</a></li>
+                                <li><a href="https://d.cess.network/n1/1338053122.csv" target="_blank" class="hover:underline">Link 3 (recipients3)</a></li>
+                                <li><a href="https://d.cess.network/n1/738595260.csv" target="_blank" class="hover:underline">Link 4 (recipients4)</a></li>
+                                <li><a href="https://d.cess.network/n1/1213534582.csv" target="_blank" class="hover:underline">Link 5 (recipients5)</a></li>
+                                <li><a href="https://d.cess.network/n1/1210782270.csv" target="_blank" class="hover:underline">Link 6 (recipients6)</a></li>
+                                <li><a href="https://d.cess.network/n1/1179652688.csv" target="_blank" class="hover:underline">Link 7 (recipients7)</a></li>
+                                <li><a href="https://d.cess.network/n1/645402960.csv" target="_blank" class="hover:underline">Link 8 (recipients8)</a></li>
+                                <li><a href="https://d.cess.network/n1/1006375340.csv" target="_blank" class="hover:underline">Link 9 (recipients9)</a></li>
+                                <li><a href="https://d.cess.network/n1/1249120790.csv" target="_blank" class="hover:underline">Link 10 (recipients10)</a></li>
+                                <li><a href="https://d.cess.network/n1/892015044.csv" target="_blank" class="hover:underline">Link 11 (recipients11)</a></li>
+                                <li><a href="https://d.cess.network/n1/1174737402.csv" target="_blank" class="hover:underline">Link 12 (recipients12)</a></li>
+                            </ul>
+
+                            <label for="predefined-file-input" class="block font-medium mb-1 text-accent">Or Upload Your Own Predefined List (CSV)</label>
+                            <input type="file" id="predefined-file-input" accept=".csv" class="w-full p-2 border border-accent rounded-md mb-2 wallet-feature-control" disabled>
+                            <button id="load-predefined-file-btn" class="mt-2 w-full py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-secondary wallet-feature-control" disabled>Load Predefined Addresses from CSV</button>
+                            <p id="predefined-addresses-info" class="text-sm text-gray-500 mt-1">No file loaded.</p>
+                            <ul id="predefined-addresses-display" class="list-disc pl-5 space-y-1 text-sm text-accent max-h-32 overflow-y-auto mt-2">
+                                <!-- Predefined addresses will be populated here -->
+                            </ul>
+                            <p id="predefined-addresses-count" class="text-sm text-green-600 mt-2 font-medium"></p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Configuration Section -->
+                <section id="config" class="mb-12">
+                    <h2 class="text-3xl font-bold mb-2 text-main">Configuration</h2>
+                    <p class="text-accent mb-6">Define the parameters for the Blockchain Interaction, including network settings, amounts, delays, and gas thresholds.</p>
+
+                    <!-- NEW: API Key Input -->
+                    <div class="mb-6">
+                        <label for="api-key-input" class="block font-medium text-accent mb-1">Gemini API Key (Optional)</label>
+                        <input type="text" id="api-key-input" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="Enter your Gemini API Key (e.g., AIzaSy...)">
+                        <p class="text-sm text-gray-500 mt-1">If left blank, a default key may be used (if available in environment).</p>
+                    </div>
+
+                    <!-- NEW: Stealth Profile Preset -->
+                    <div class="mb-6">
+                        <label for="stealth-profile" class="block font-medium text-accent mb-1">Stealth Profile Preset</label>
+                        <select id="stealth-profile" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <option value="balanced" selected>🧠 Balanced (Default)</option>
+                            <option value="aggressive">🚀 Aggressive Interaction</option>
+                            <option value="ultraSlow">🐢 Ultra-Slow & Stealthy</option>
+                            <option value="custom">⚙️ Manual Custom</option>
+                        </select>
+                    </div>
+
+                    <!-- Main configuration grid container -->
+                    <div class="bg-secondary p-8 rounded-lg shadow-md grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Individual configuration items -->
+                        <div>
+                            <label for="max-txns-per-wallet" class="block font-medium mb-1 text-accent">Max Actions Per Wallet Session
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">The maximum number of distinct actions (send, idle, balance check) a single wallet will attempt in its session on a given blockchain network. The actual number of actions will be randomized up to this maximum.</span></span>
+                            </label>
+                            <input type="number" id="max-txns-per-wallet" value="3" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Maximum actions a single wallet will perform in its session on a given chain.</p>
+                        </div>
+                        <div>
+                            <label for="wallet-idle-chance" class="block font-medium mb-1 text-accent">Wallet Idle Chance (%)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">The percentage chance that a specific wallet will be "idle" for an entire session on a chain, meaning it will perform no actions. This simulates unpredictable human-like behavior.</span></span>
+                            </label>
+                            <input type="number" id="wallet-idle-chance" value="25" min="0" max="100" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Chance for a wallet to be idle and skip its session on a chain.</p>
+                        </div>
+                        <div>
+                            <label for="gas-multiplier" class="block font-medium mb-1 text-accent">Max Gas Price Multiplier
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">If the current gas price on the network exceeds the average gas price by this multiplier, the script will temporarily pause activities for that wallet on that chain to avoid high fees.</span></span>
+                            </label>
+                            <input type="number" id="gas-multiplier" value="2" step="0.1" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Skip wallet activity if current gas price exceeds average by this multiplier.</p>
+                        </div>
+                        <!-- NEW: Max Retries Field -->
+                        <div>
+                            <label for="max-retries" class="block font-medium mb-1 text-accent">Max Retries on Failure
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">The maximum number of times to retry a failed transaction before skipping it. Set to 0 for no retries.</span></span>
+                            </label>
+                            <input type="number" id="max-retries" value="1" min="0" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Number of retries for a failed transaction.</p>
+                        </div>
+                        <!-- NEW: Min Gas Factor -->
+                        <div>
+                            <label for="min-gas-factor" class="block font-medium mb-1 text-accent">Min Gas Factor (x)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">A random factor (between this min and Max Gas Factor) will be applied to the calculated gas price/priority fee to introduce variance.</span></span>
+                            </label>
+                            <input type="number" id="min-gas-factor" value="0.9" step="0.01" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Minimum factor for random gas price/priority fee adjustment.</p>
+                        </div>
+                        <!-- NEW: Max Gas Factor -->
+                        <div>
+                            <label for="max-gas-factor" class="block font-medium mb-1 text-accent">Max Gas Factor (x)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">A random factor (between Min Gas Factor and this max) will be applied to the calculated gas price/priority fee to introduce variance.</span></span>
+                            </label>
+                            <input type="number" id="max-gas-factor" value="1.1" step="0.01" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Maximum factor for random gas price/priority fee adjustment.</p>
+                        </div>
+                        <div>
+                            <label for="block-lookback" class="block font-medium mb-1 text-accent">Blocks to Scan for Addresses
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">The number of recent blockchain blocks the script will scan to find and add new potential recipient addresses to its pool. A higher number means more discovery but takes longer.</span></span>
+                            </label>
+                            <input type="number" id="block-lookback" value="100" min="10" max="1000" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Number of recent blocks to scan for new recipient addresses.</p>
+                        </div>
+
+                        <!-- NEW: Probability Jitter Factor -->
+                        <div>
+                            <label for="prob-jitter-factor" class="block font-medium mb-1 text-accent">Probability Jitter Factor (%)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">A percentage range (e.g., 5 for ±5%) within which each wallet's action probabilities (Send, Idle, Balance Check) will randomly vary from the global configured probabilities. Set to 0 for no jitter.</span></span>
+                            </label>
+                            <input type="number" id="prob-jitter-factor" value="5" min="0" max="50" step="1" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Random variation applied to each wallet's action probabilities.</p>
+                        </div>
+                        <!-- NEW: Simulated Error Chance -->
+                        <div>
+                            <label for="simulated-error-chance" class="block font-medium mb-1 text-accent">Simulated Transaction Error Chance (%)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">The percentage chance that a 'send' transaction will randomly fail, mimicking network errors. The script will then retry with exponential backoff. Set to 0 to disable.</span></span>
+                            </label>
+                            <input type="number" id="simulated-error-chance" value="0" min="0" max="100" step="1" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Chance for a transaction to randomly fail (simulated).</p>
+                        </div>
+
+                        <!-- NEW: Think Time Bursts -->
+                        <div>
+                            <label for="think-time-chance" class="block font-medium mb-1 text-accent">Think Time Chance (%)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">The percentage chance that a wallet will enter a longer "think time" pause (1-2 minutes) between actions, simulating human cognitive breaks.</span></span>
+                            </label>
+                            <input type="number" id="think-time-chance" value="10" min="0" max="100" step="1" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Chance for a longer "think time" delay.</p>
+                        </div>
+                        <div>
+                            <label for="min-think-time" class="block font-medium mb-1 text-accent">Min Think Time (seconds)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">Minimum duration for a "think time" pause.</span></span>
+                            </label>
+                            <input type="number" id="min-think-time" value="60" min="10" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Minimum seconds for a "think time" pause.</p>
+                        </div>
+                        <div>
+                            <label for="max-think-time" class="block font-medium mb-1 text-accent">Max Think Time (seconds)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">Maximum duration for a "think time" pause.</span></span>
+                            </label>
+                            <input type="number" id="max-think-time" value="120" min="10" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Maximum seconds for a "think time" pause.</p>
+                        </div>
+
+                        <!-- NEW: Activity Bursts & Lulls -->
+                        <div>
+                            <label for="activity-burst-chance" class="block font-medium mb-1 text-accent">Activity Burst Chance (%)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">The percentage chance that a wallet will enter an "activity burst" session, performing multiple actions in quick succession before a longer lull.</span></span>
+                            </label>
+                            <input type="number" id="activity-burst-chance" value="50" min="0" max="100" step="1" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Chance for a wallet to perform actions in a burst.</p>
+                        </div>
+                        <div>
+                            <label for="min-burst-actions" class="block font-medium mb-1 text-accent">Min Burst Actions
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">Minimum number of actions to perform during an activity burst.</span></span>
+                            </label>
+                            <input type="number" id="min-burst-actions" value="2" min="1" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Minimum actions in a burst.</p>
+                        </div>
+                        <div>
+                            <label for="max-burst-actions" class="block font-medium mb-1 text-accent">Max Burst Actions
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">Maximum number of actions to perform during an activity burst.</span></span>
+                            </label>
+                            <input type="number" id="max-burst-actions" value="5" min="1" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Maximum actions in a burst.</p>
+                        </div>
+                        <div>
+                            <label for="min-lull-time" class="block font-medium mb-1 text-accent">Min Lull Time (seconds)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">Minimum duration for a "lull" period after an activity burst.</span></span>
+                            </label>
+                            <input type="number" id="min-lull-time" value="300" min="60" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Minimum seconds for a lull period.</p>
+                        </div>
+                        <div>
+                            <label for="max-lull-time" class="block font-medium mb-1 text-accent">Max Lull Time (seconds)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">Maximum duration for a "lull" period after an activity burst.</span></span>
+                            </label>
+                            <input type="number" id="max-lull-time" value="900" min="60" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Maximum seconds for a "lull" period.</p>
+                        </div>
+
+                        <!-- NEW: Time-of-Day Bias -->
+                        <div class="md:col-span-2">
+                            <label class="flex items-center mb-1 text-accent">
+                                <input type="checkbox" id="enable-time-of-day-bias" class="form-checkbox h-5 w-5 text-blue-600 wallet-feature-control" disabled>
+                                <span class="ml-3 text-main">Enable Time-of-Day Bias
+                                    <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">Adjusts activity rates to mimic human awake hours (e.g., lower activity during local night).</span></span>
+                                </span>
+                            </label>
+                            <p class="text-sm text-gray-500 mt-1">If enabled, activity will be reduced during simulated night hours (1 AM - 6 AM local time).</p>
+                        </div>
+
+                        <!-- NEW: RPC Switch Delay -->
+                        <div>
+                            <label for="rpc-switch-delay" class="block font-medium mb-1 text-accent">RPC Switch Delay (seconds)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">Delay introduced when switching between different RPC endpoints to simulate network imperfection.</span></span>
+                            </label>
+                            <input type="number" id="rpc-switch-delay" value="5" min="0" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Delay when switching RPC endpoints.</p>
+                        </div>
+
+                        <!-- NEW: Wallet Switch Delay -->
+                        <div>
+                            <label for="wallet-switch-delay" class="block font-medium mb-1 text-accent">Wallet Switch Delay (seconds)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">Delay introduced when switching between different wallets to simulate human-like pauses.</span></span>
+                            </label>
+                            <input type="number" id="wallet-switch-delay" value="5" min="2" max="8" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <p class="text-sm text-gray-500 mt-1">Delay when switching between wallets (2-8 seconds).</p>
+                        </div>
+
+
+                        <!-- Transaction Amount Range (spans 2 columns on medium screens and up) -->
+                        <div class="md:col-span-2">
+                            <label class="block font-medium mb-1 text-accent">Transaction Amount Range (ETH)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">When a 'send' action is chosen, a random amount of ETH will be sent within this specified minimum and maximum range.</span></span>
+                            </label>
+                            <div class="flex items-center space-x-4">
+                                <!-- Using flex-1 to ensure inputs share space equally within the flex container -->
+                                <input type="number" id="min-amount" value="0.0001" step="0.0001" class="flex-1 p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                                <span class="text-gray-500">to</span>
+                                <input type="number" id="max-amount" value="0.0002" step="0.0001" class="flex-1 p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            </div>
+                             <p class="text-sm text-gray-500 mt-1">A random ETH amount within this range will be sent for 'send' actions.</p>
+                             <button id="explain-send-tx-btn" class="mt-4 py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-llm wallet-feature-control" disabled>✨ Explain Send Tx</button>
+                        </div>
+
+                        <!-- Delay Between Actions (spans 2 columns on medium screens and up) -->
+                        <div class="md:col-span-2">
+                            <label class="block font-medium mb-1 text-accent">Delay Between Actions (seconds)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">After each action (send, idle, balance check), the script will pause for a random duration, sampled from a log-normal distribution, within this minimum and maximum second range.</span></span>
+                            </label>
+                            <div class="flex items-center space-x-4">
+                                <!-- Using flex-1 to ensure inputs share space equally within the flex container -->
+                                <input type="number" id="min-delay" value="10" class="flex-1 p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                                <span class="text-gray-500">to</span>
+                                <input type="number" id="max-delay" value="30" class="flex-1 p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-1">A log-normal random delay will be applied after each action.</p>
+                        </div>
+
+                        <!-- RPC Endpoints & Chain IDs (spans 2 columns on medium screens and up) -->
+                        <div class="md:col-span-2">
+                            <label class="block font-medium mb-1 text-accent">RPC Endpoints & Chain IDs (Format: URL,ChainID - one per line)
+                                <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">List the RPC URLs for the blockchain networks you want to interact with, followed by their corresponding Chain ID (e.g., 'https://mainnet.infura.io/v3/YOUR_ID,1'). The script will cycle through these networks.</span></span>
+                            </label>
+                            <textarea id="rpc-urls" rows="4" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>https://mainnet.infura.io/v3/YOUR_PROJECT_ID,1
+https://rpc.goerli.dev,5</textarea>
+                            <p class="text-sm text-gray-500 mt-1">The script will cycle through these RPCs and chains.</p>
+                            <button id="test-rpc-btn" class="mt-4 py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-secondary wallet-feature-control" disabled>⚡ Test RPC Connections</button>
+                        </div>
+
+                        <!-- Action Probability Matrix (spans 2 columns on medium screens and up, contains its own grid) -->
+                        <div class="md:col-span-2">
+                            <h3 class="font-bold text-lg mb-4 text-main">Action Probability Matrix (%)</h3>
+                            <p class="text-sm text-accent mb-4">Define the percentage chance for each action type. Must sum to 100.</p>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                <div>
+                                    <label for="prob-send" class="block font-medium mb-1 text-accent">Send</label>
+                                    <input type="number" id="prob-send" value="60" min="0" max="100" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition prob-input wallet-feature-control" disabled>
+                                </div>
+                                <div>
+                                    <label for="prob-idle-action" class="block font-medium mb-1 text-accent">Idle Action</label>
+                                    <input type="number" id="prob-idle-action" value="20" min="0" max="100" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition prob-input wallet-feature-control" disabled>
+                                </div>
+                                <div>
+                                    <label for="prob-balance-check" class="block font-medium mb-1 text-accent">Balance Check</label>
+                                    <input type="number" id="prob-balance-check" value="20" min="0" max="100" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition prob-input wallet-feature-control" disabled>
+                                </div>
+                            </div>
+                            <p id="prob-sum-warning" class="text-sm text-red-500 mt-2 hidden">Probabilities must sum to 100%!</p>
+                        </div>
+                    </div>
+                </section>
+
+
+                <!-- Live Log Section -->
+                <section id="log">
+                     <h2 class="text-3xl font-bold mb-2 text-main">Live Log</h2>
+                     <p class="text-accent mb-6">Real-time output from the Blockchain Interaction process will appear below. You can also download the complete log.</p>
+                    <div class="bg-gray-800 text-white rounded-lg shadow-md p-4 h-96 overflow-y-auto mb-4">
+                        <div id="live-log"></div>
+                    </div>
+                    <div class="flex flex-wrap gap-4">
+                        <div class="dropdown">
+                            <button id="download-log-btn" class="py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-success wallet-feature-control" disabled>⬇️ Download Log</button>
+                            <div class="dropdown-content">
+                                <button id="download-log-csv-btn">Download CSV</button>
+                                <button id="download-log-json-btn">Download JSON</button>
+                            </div>
+                        </div>
+                        <button id="clear-log-btn" class="py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-secondary wallet-feature-control" disabled>🗑️ Clear Log</button>
+                        <button id="summarize-log-btn" class="py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-llm wallet-feature-control" disabled>✨ Summarize Log</button>
+                    </div>
+                </section>
+            </div><!-- End script-console-content -->
+        </div><!-- End container mx-auto -->
+    </main>
+
+    <!-- UPDATED FOOTER SECTION -->
+    <footer class="bg-gray-800 text-white py-12">
+        <div class="container mx-auto px-6 text-center">
+            <h3 class="text-2xl font-bold mb-2">We Grow Together!</h3>
+            <p class="mb-4 max-w-2xl mx-auto text-gray-300">
+                Your contributions help keep this project alive, ad-free, and continuously improving. Consider supporting our development efforts by donating.
+            </p>
+            <div class="flex items-center justify-center bg-gray-700 p-3 rounded-lg max-w-md mx-auto mb-6 shadow-md">
+                <span id="donation-address" class="text-sm md:text-base text-white font-mono break-all mr-2">0x1C46ccEA4D62d3eEC4DCE3501aa96d0Ff5FcA954</span>
+                <button id="copy-address-btn" class="ml-auto p-2 rounded-md hover:bg-gray-600 transition-colors" title="Copy Address">
+                    <svg id="copy-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
+                        <path d="M4 1.5H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1h1v-1z"/>
+                        <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                    </svg>
+                     <svg id="check-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-check2 hidden text-green-400" viewBox="0 0 16 16">
+                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
+                    </svg>
+                </button>
+                <button id="show-qr-btn" class="ml-2 p-2 rounded-md hover:bg-gray-600 transition-colors" title="Show QR Code">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-qr-code" viewBox="0 0 16 16">
+                        <path d="M2 2h2v2H2V2Z"/>
+                        <path d="M6 0v6H0V0h6ZM5 1H1v4h4V1ZM4 12H2v2h2v-2Z"/>
+                        <path d="M6 10v6H0v-6h6Zm-5 1v4h4v-4H1Zm11-9h2v2h-2V2Z"/>
+                        <path d="M10 0v6h6V0h-6ZM5 1v4h-4V1h4ZM8 1V0h1v2H8v2H7V1h1Zm0 5V4h1v2H8ZM6 8V7h1V6h1v2h1V7h5v1h-4v1H7V8H6Zm0 0v1H2V8H1v1H0V7h3v1h3Zm10 1h-1V7h1v2Zm-1 0h-1v2h2v-1h-1V9Zm-4 0h2v1h-1v1h-1V9Zm2 3v-1h-1v1h-1v1H9v1h3v-2h1v-1h-3Zm-4-3v1h1v-2H7v1h2v1H7Z"/>
+                        <path d="M7 12h1v3h4v1H7v-4Zm9 2v2h-3v-1h2v-1h1Z"/>
+                    </svg>
+                </button>
+            </div>
+             <p class="text-sm text-gray-400 mt-8">
+                &copy; 2025 FarmLabs. All rights reserved.
+            </p>
+            <div class="flex items-center justify-center mt-4 space-x-6">
+                <a href="https://farm-labs.blogspot.com/" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white" title="Blog">
+                    <i class="fab fa-blogger fa-lg"></i>
+                </a>
+                <a href="https://t.me/farm_lab" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white" title="Telegram">
+                    <i class="fab fa-telegram fa-lg"></i>
+                </a>
+                <a href="https://github.com/CryptoExplor/farmlabs" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-white" title="GitHub">
+                    <i class="fab fa-github fa-lg"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- QR Code Modal -->
+    <div id="qr-code-modal" class="modal hidden">
+        <div class="modal-content text-main flex flex-col items-center text-center">
+            <span class="close-qr-button self-end">&times;</span>
+            <h3 class="text-xl font-bold mb-4">Donation Address</h3>
+            <div id="qr-code-container" class="p-4 bg-white inline-block rounded-lg shadow-inner"></div>
+            <p class="font-mono text-xs mt-4 break-all" id="qr-address-display"></p>
+        </div>
+    </div>
+    
+    <!-- Gemini Explanation Modal -->
+    <div id="gemini-modal" class="modal hidden">
+        <div class="modal-content text-main">
+            <span class="close-button">&times;</span>
+            <h3 id="modal-title" class="text-xl font-bold mb-4">Gemini Explanation</h3>
+            <div id="modal-content" class="text-accent">
+                <div class="modal-loader"></div>
+                <p class="text-center mt-4">Generating explanation...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal hidden">
+        <div class="modal-content text-main">
+            <span class="close-confirm-button">&times;</span>
+            <h3 class="text-xl font-bold mb-4">Confirm Action</h3>
+            <p id="confirm-message" class="mb-6 text-accent">Are you sure you want to proceed?</p>
+            <div class="flex justify-end space-x-4">
+                <button id="cancel-confirm-btn" class="py-2 px-4 rounded-lg font-semibold btn-secondary">Cancel</button>
+                <button id="confirm-action-btn" class="py-2 px-4 rounded-lg font-semibold btn-primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script type="module" src="js/config.js"></script>
+    <script type="module" src="js/stealth.js"></script>
+    <script type="module" src="js/rpc.js"></script>
+    <script type="module" src="js/ui.js"></script>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

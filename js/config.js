@@ -1,4 +1,5 @@
 // js/config.js
+import { log } from './ui.js'; // Import the log function
 
 // Utility for setting UI element values
 const setConfigValue = (id, value) => {
@@ -158,21 +159,21 @@ export const injectStealthDefaults = () => {
 /**
  * Applies a selected stealth profile to the UI configuration.
  * @param {string} profileName - The name of the profile to apply.
+ * @param {object} appState - The global application state object.
  * @param {object} ui - UI element references.
- * @param {function} log - Logging function from ui.js.
  * @param {function} loadConfiguration - Function to load configuration from ui.js.
  */
-export const applyProfile = (profileName, ui, log, loadConfiguration) => {
+export const applyProfile = (profileName, appState, ui, loadConfiguration) => {
     const profile = stealthProfiles[profileName];
     if (!profile) {
-        log(`Error: Stealth profile '${profileName}' not found.`, 'error');
+        log(`Error: Stealth profile '${profileName}' not found.`, 'error', {}, appState); // Pass appState to log
         return;
     }
     Object.entries(profile).forEach(([id, value]) => {
         setConfigValue(id, value);
     });
-    loadConfiguration(); // Reload configuration after applying profile
-    log(`Applied '${profileName}' stealth profile. Configuration updated.`, 'success');
+    loadConfiguration(appState, ui, log); // Pass appState, ui, and log to loadConfiguration
+    log(`Applied '${profileName}' stealth profile. Configuration updated.`, 'success', {}, appState); // Pass appState to log
 };
 
 /**
@@ -190,6 +191,7 @@ export const loadConfiguration = (appState, ui, log) => {
 
     if (totalProb !== 100) {
         ui.probSumWarning.classList.remove('hidden');
+        log('Error: Probabilities must sum to 100%!', 'error', {}, appState); // Pass appState to log
         return false;
     } else {
         ui.probSumWarning.classList.add('hidden');
@@ -198,41 +200,41 @@ export const loadConfiguration = (appState, ui, log) => {
     const minAmount = parseFloat(ui.minAmount.value);
     const maxAmount = parseFloat(ui.maxAmount.value);
     if (minAmount > maxAmount) {
-        log('Error: Minimum amount cannot be greater than maximum amount.', 'error');
+        log('Error: Minimum amount cannot be greater than maximum amount.', 'error', {}, appState); // Pass appState to log
         return false;
     }
 
     const minDelay = parseInt(ui.minDelay.value);
     const maxDelay = parseInt(ui.maxDelay.value);
     if (minDelay > maxDelay) {
-        log('Error: Minimum delay cannot be greater than maximum delay.', 'error');
+        log('Error: Minimum delay cannot be greater than maximum delay.', 'error', {}, appState); // Pass appState to log
         return false;
     }
 
     const minGasFactor = parseFloat(ui.minGasFactor.value);
     const maxGasFactor = parseFloat(ui.maxGasFactor.value);
     if (minGasFactor > maxGasFactor || minGasFactor <= 0) {
-        log('Error: Minimum gas factor must be greater than 0 and less than or equal to maximum gas factor.', 'error');
+        log('Error: Minimum gas factor must be greater than 0 and less than or equal to maximum gas factor.', 'error', {}, appState); // Pass appState to log
         return false;
     }
 
     const minThinkTime = parseInt(ui.minThinkTime.value);
     const maxThinkTime = parseInt(ui.maxThinkTime.value);
     if (minThinkTime > maxThinkTime) {
-        log('Error: Minimum Think Time cannot be greater than maximum Think Time.', 'error');
+        log('Error: Minimum Think Time cannot be greater than maximum Think Time.', 'error', {}, appState); // Pass appState to log
         return false;
     }
 
     const minBurstActions = parseInt(ui.minBurstActions.value);
     const maxBurstActions = parseInt(ui.maxBurstActions.value);
     if (minBurstActions > maxBurstActions) {
-        log('Error: Minimum Burst Actions cannot be greater than maximum Burst Actions.', 'error');
+        log('Error: Minimum Burst Actions cannot be greater than maximum Burst Actions.', 'error', {}, appState); // Pass appState to log
         return false;
     }
     const minLullTime = parseInt(ui.minLullTime.value);
     const maxLullTime = parseInt(ui.maxLullTime.value);
     if (minLullTime > maxLullTime) {
-        log('Error: Minimum Lull Time cannot be greater than maximum Lull Time.', 'error');
+        log('Error: Minimum Lull Time cannot be greater than maximum Lull Time.', 'error', {}, appState); // Pass appState to log
         return false;
     }
 
@@ -273,7 +275,7 @@ export const loadConfiguration = (appState, ui, log) => {
         const [url, chainIdStr] = line.split(',').map(s => s.trim());
         const chainId = parseInt(chainIdStr);
         if (!url || isNaN(chainId)) {
-            log(`Warning: Invalid RPC entry ignored: "${line}". Format should be "URL,ChainID".`, 'warning');
+            log(`Warning: Invalid RPC entry ignored: "${line}". Format should be "URL,ChainID".`, 'warning', {}, appState); // Pass appState to log
             return null;
         }
         return { url, chainId: chainId };

@@ -1,4 +1,5 @@
 // js/ui.js
+import { ethers } from 'https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js'; // Import ethers
 import { Stealth } from './stealth.js'; // Import Stealth utilities for log-normal delay
 import { loadConfiguration, applyProfile, stealthProfiles } from './config.js'; // Import config functions
 
@@ -322,9 +323,8 @@ export const copyToClipboard = (text, appState) => {
 /**
  * Loads wallets from the private keys textarea and checks their balances.
  * @param {object} appState - The global application state object.
- * @param {ethers.JsonRpcProvider} ethers - The ethers.js library.
  */
-export const loadWallets = async (appState, ethers) => {
+export const loadWallets = async (appState) => {
     const keys = ui.privateKeys.value.split('\n').map(k => k.trim()).filter(Boolean);
     if (keys.length === 0) {
         log('No private keys provided. Please paste private keys into the text area.', 'error', {}, appState);
@@ -386,9 +386,8 @@ export const loadWallets = async (appState, ethers) => {
 /**
  * Loads recipient addresses from the custom list textarea.
  * @param {object} appState - The global application state object.
- * @param {ethers.JsonRpcProvider} ethers - The ethers.js library.
  */
-export const loadAddressesFromList = (appState, ethers) => {
+export const loadAddressesFromList = (appState) => {
     const addressesInput = ui.listAddresses.value.split('\n').map(addr => addr.trim()).filter(Boolean);
     const validAddresses = [];
     let invalidCount = 0;
@@ -414,9 +413,8 @@ export const loadAddressesFromList = (appState, ethers) => {
 /**
  * Loads predefined recipient addresses from a CSV file.
  * @param {object} appState - The global application state object.
- * @param {ethers.JsonRpcProvider} ethers - The ethers.js library.
  */
-export const loadPredefinedListFromFile = (appState, ethers) => {
+export const loadPredefinedListFromFile = (appState) => {
     const file = ui.predefinedFileInput.files[0];
     if (!file) {
         log('No file selected for predefined list.', 'warning', {}, appState);
@@ -643,97 +641,28 @@ export const clearLog = (appState) => {
 };
 
 /**
- * Connects to the user's MetaMask or compatible wallet.
- * @param {object} appState - The global application state object.
- * @param {function} setUIEnabled - Function to enable/disable UI elements.
- */
-export const connectWallet = async (appState, setUIEnabled) => {
-    if (typeof window.ethereum === 'undefined') {
-        log('MetaMask or compatible wallet not detected. Please install one.', 'error', {}, appState);
-        ui.walletStatusDisplay.innerHTML = `No wallet detected. Please install <a href="https://metamask.io/" target="_blank" class="underline text-blue-500">MetaMask</a> or a compatible browser extension.`;
-        setUIEnabled(false);
-        return;
-    }
-
-    log('window.ethereum detected. Requesting accounts...', 'info', {}, appState);
-    ui.walletStatusDisplay.innerHTML = 'Connecting... (Check your wallet extension for a pop-up)';
-    try {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-
-        if (accounts.length === 0) {
-            log('No accounts found. Please connect your wallet and select an account.', 'error', {}, appState);
-            appState.connectedAddress = null;
-            ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
-            setUIEnabled(false);
-            return;
-        }
-        appState.connectedAddress = accounts[0];
-        log(`Wallet connected: ${appState.connectedAddress}`, 'success', {}, appState);
-        ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
-        setUIEnabled(true);
-
-        window.ethereum.on('accountsChanged', (newAccounts) => {
-            log('Wallet accounts changed event detected.', 'info', {}, appState);
-            if (newAccounts.length === 0) {
-                log('Wallet disconnected or no accounts selected.', 'warning', {}, appState);
-                appState.connectedAddress = null;
-                ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
-                setUIEnabled(false);
-            } else if (appState.connectedAddress && newAccounts[0].toLowerCase() !== appState.connectedAddress.toLowerCase()) {
-                log(`Account changed to: ${newAccounts[0]}`, 'info', {}, appState);
-                appState.connectedAddress = newAccounts[0];
-                ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
-                setUIEnabled(true);
-            } else if (!appState.connectedAddress) {
-                log(`Wallet reconnected with account: ${newAccounts[0]}`, 'info', {}, appState);
-                appState.connectedAddress = newAccounts[0];
-                ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
-                setUIEnabled(true);
-            }
-        });
-
-        window.ethereum.on('chainChanged', (chainId) => {
-            log(`Network changed to Chain ID: ${parseInt(chainId, 16)}. Please ensure your RPC configurations match this network.`, 'warning', {}, appState);
-        });
-
-        window.ethereum.on('disconnect', (error) => {
-            log(`Wallet disconnected: ${error.message || 'Unknown error'}`, 'error', {}, appState);
-            appState.connectedAddress = null;
-            ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
-            setUIEnabled(false);
-        });
-
-    } catch (error) {
-        log(`Wallet connection failed: ${error.message}`, 'error', {}, appState);
-        appState.connectedAddress = null;
-        ui.walletStatusDisplay.innerHTML = `Connection failed.`;
-        setUIEnabled(false);
-    }
-};
-
-/**
  * Sets up all event listeners for UI interactions.
  * @param {object} appState - The global application state object.
  * @param {function} startInteraction - Function to start the interaction loop.
  * @param {function} stopInteraction - Function to stop the interaction loop.
  * @param {function} clearAllData - Function to clear all data.
  * @param {function} testRpcConnections - Function to test RPC connections.
- * @param {ethers.JsonRpcProvider} ethers - The ethers.js library.
+ * @param {function} connectWallet - Function to connect wallet from wallet.js.
  */
-export const setupEventListeners = (appState, startInteraction, stopInteraction, clearAllData, testRpcConnections, ethers) => {
-    ui.connectWalletBtn.addEventListener('click', () => connectWallet(appState, setUIEnabled));
-    ui.startBtn.addEventListener('click', () => startInteraction(appState, ethers));
+export const setupEventListeners = (appState, startInteraction, stopInteraction, clearAllData, testRpcConnections, connectWallet) => {
+    ui.connectWalletBtn.addEventListener('click', () => connectWallet(appState)); // Use imported connectWallet
+    ui.startBtn.addEventListener('click', () => startInteraction(appState));
     ui.stopBtn.addEventListener('click', () => stopInteraction(appState));
     ui.clearAllDataBtn.addEventListener('click', () => clearAllData(appState));
-    ui.loadKeysBtn.addEventListener('click', () => loadWallets(appState, ethers));
-    ui.testRpcBtn.addEventListener('click', () => testRpcConnections(appState, () => loadConfiguration(appState, ui, log), ethers));
+    ui.loadKeysBtn.addEventListener('click', () => loadWallets(appState)); // ethers is imported in ui.js
+    ui.testRpcBtn.addEventListener('click', () => testRpcConnections(appState, () => loadConfiguration(appState, ui, log))); // ethers is imported in rpc.js
     ui.downloadLogCsvBtn.addEventListener('click', () => downloadLogCsv(appState));
     ui.downloadLogJsonBtn.addEventListener('click', () => downloadLogJson(appState));
     ui.clearLogBtn.addEventListener('click', () => clearLog(appState));
     ui.summarizeLogBtn.addEventListener('click', () => handleSummarizeLog(appState));
     ui.explainSendTxBtn.addEventListener('click', () => handleExplainSendTx(appState));
-    ui.loadAddressesFromListBtn.addEventListener('click', () => loadAddressesFromList(appState, ethers));
-    ui.loadPredefinedFileBtn.addEventListener('click', () => loadPredefinedListFromFile(appState, ethers));
+    ui.loadAddressesFromListBtn.addEventListener('click', () => loadAddressesFromList(appState)); // ethers is imported in ui.js
+    ui.loadPredefinedFileBtn.addEventListener('click', () => loadPredefinedListFromFile(appState)); // ethers is imported in ui.js
 
     ui.closeModalBtn.addEventListener('click', closeGeminiModal);
     window.addEventListener('click', (event) => {
@@ -797,7 +726,7 @@ export const setupEventListeners = (appState, startInteraction, stopInteraction,
     ui.stealthProfileSelector.addEventListener("change", (e) => {
         const selected = e.target.value;
         if (selected !== "custom") {
-            applyProfile(selected, ui, log, () => loadConfiguration(appState, ui, log));
+            applyProfile(selected, appState, ui, loadConfiguration); // Pass appState to applyProfile
         } else {
             loadConfiguration(appState, ui, log);
             log(`Switched to 'Manual Custom' profile. Current settings will be used.`, 'info', {}, appState);

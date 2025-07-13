@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advance Interactive Script Console</title>
-    <!-- Google AdSense Account Meta Tag (Recommended in <head>) -->
-    <meta name="google-adsense-account" content="ca-pub-3062851685354753">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
@@ -675,6 +673,17 @@
                         </select>
                     </div>
 
+                    <!-- NEW: Persona Mode Dropdown -->
+                    <div class="mb-6">
+                        <label for="persona-mode" class="block font-medium text-accent mb-1">Persona Mode</label>
+                        <select id="persona-mode" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>
+                            <option value="random">Random</option>
+                            <option value="speedy">Speedy Mode</option>
+                            <option value="lazy">Lazy Mode</option>
+                        </select>
+                        <p class="text-sm text-gray-500 mt-1">Select a mode to influence persona behavior (delay and idle chance).</p>
+                    </div>
+
                     <!-- Main configuration grid container -->
                     <div class="bg-secondary p-8 rounded-lg shadow-md grid grid-cols-1 md:grid-cols-2 gap-8">
                         <!-- Individual configuration items -->
@@ -873,8 +882,9 @@
                                 <span class="tooltip-container ml-1 text-gray-400 cursor-pointer">ℹ️<span class="tooltip-text">List the RPC URLs for the blockchain networks you want to interact with, followed by their corresponding Chain ID (e.g., 'https://mainnet.infura.io/v3/YOUR_ID,1'). The script will cycle through these networks.</span></span>
                             </label>
                             <textarea id="rpc-urls" rows="4" class="w-full p-2 border border-accent rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition wallet-feature-control" disabled>https://mainnet.infura.io/v3/YOUR_PROJECT_ID,1
-https://rpc.goerli.dev,5</textarea>
-                            <p class="text-sm text-gray-500 mt-1">The script will cycle through these RPCs and chains.</p>
+https://rpc.goerli.dev,5
+https://sepolia.infura.io/v3/YOUR_PROJECT_ID,11155111</textarea>
+                            <p class="text-sm text-gray-500 mt-1">The script will cycle through these RPCs and chains. **Remember to replace 'YOUR_PROJECT_ID' with your actual Infura Project ID.**</p>
                             <button id="test-rpc-btn" class="mt-4 py-2 px-4 rounded-lg font-semibold transition-all duration-300 btn-secondary wallet-feature-control" disabled>⚡ Test RPC Connections</button>
                         </div>
 
@@ -1005,11 +1015,1401 @@ https://rpc.goerli.dev,5</textarea>
         </div>
     </div>
 
-    <!-- JavaScript Modules -->
-    <script type="module" src="js/config.js"></script>
-    <script type="module" src="js/stealth.js"></script>
-    <script type="module" src="js/rpc.js"></script>
-    <script type="module" src="js/ui.js"></script>
-    <script type="module" src="js/main.js"></script>
+    <script type="module">
+        // Import modules
+        import { WalletPersonaManager } from './walletPersonaManager.js';
+        import { Stealth, setConfigValue, sleep } from './utils.js';
+        import { ui, initializeUI, setUIEnabled, openGeminiModal, closeGeminiModal, openConfirmationModal, log, initConsoleCharts, updateWalletBalanceChart, updateActionDistChart, copyToClipboard, setupEventListeners, confirmAction, cancelAction } from './uiManager.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize UI elements
+            initializeUI();
+
+            const appState = {
+                isRunning: false,
+                stopFlag: false,
+                wallets: [], // Each wallet object will now include a 'persona' property
+                // appState.rpcConfigs will now be a Map: Map<chainId, [{url: string, provider: ethers.JsonRpcProvider}]>
+                rpcConfigs: new Map(), 
+                currentRecipientPool: {}, // {chainId: [addresses]}
+                manualRecipientList: [], // For user-provided list
+                predefinedRecipientList: [], // Now loaded from CSV
+                config: {},
+                stats: {
+                    totalActions: 0,
+                    successfulActions: 0,
+                    failedActions: 0,
+                    actionCounts: { send: 0, idle: 0, 'balance-check': 0, skipped: 0 }
+                },
+                logEntries: [], // For CSV export
+                charts: {
+                    walletBalance: null, 
+                    actionDist: null,
+                },
+                pendingConfirmation: null, 
+                connectedAddress: null,
+                lastHumanLikeSpike: null,
+            };
+
+            // --- Stealth Config Auto-Injector ---
+            const stealthDefaults = {
+                "max-txns-per-wallet": 5,
+                "wallet-idle-chance": 30,
+                "block-lookback": 200,
+                "simulated-error-chance": 3,
+                "enable-time-of-day-bias": true,
+                "prob-send": 60,
+                "prob-idle-action": 20,
+                "prob-balance-check": 20,
+                "min-amount": 0.0000001,
+                "max-amount": 0.0002,
+                "min-delay": 10,
+                "max-delay": 30,
+                "min-gas-factor": 0.9,
+                "max-gas-factor": 1.5,
+                "gas-multiplier": 2,
+                "max-retries": 2,
+                "prob-jitter-factor": 5,
+                "think-time-chance": 10,
+                "min-think-time": 60,
+                "max-think-time": 120,
+                "activity-burst-chance": 50,
+                "min-burst-actions": 2,
+                "max-burst-actions": 5,
+                "min-lull-time": 300,
+                "max-lull-time": 900,
+                "rpc-switch-delay": 5,
+                "wallet-switch-delay": 5,
+                "rpc-urls": [
+                    "https://mainnet.infura.io/v3/YOUR_PROJECT_ID,1",
+                    "https://rpc.goerli.dev,5",
+                    "https://sepolia.infura.io/v3/YOUR_PROJECT_ID,11155111"
+                ],
+                "persona-mode": "random"
+            };
+
+            const injectStealthDefaults = () => {
+                Object.entries(stealthDefaults).forEach(([id, value]) => {
+                    setConfigValue(id, value);
+                });
+            };
+            injectStealthDefaults(); // Call on DOMContentLoaded
+
+            // --- Stealth Profile Selector ---
+            const stealthProfiles = {
+                balanced: {
+                    "max-txns-per-wallet": 5,
+                    "wallet-idle-chance": 30,
+                    "block-lookback": 300,
+                    "simulated-error-chance": 2,
+                    "enable-time-of-day-bias": true,
+                    "prob-send": 60,
+                    "prob-idle-action": 20,
+                    "prob-balance-check": 20,
+                    "min-amount": 0.0001,
+                    "max-amount": 0.0002,
+                    "min-delay": 10,
+                    "max-delay": 30,
+                    "min-gas-factor": 0.9,
+                    "max-gas-factor": 1.1,
+                    "gas-multiplier": 2,
+                    "max-retries": 2,
+                    "prob-jitter-factor": 5,
+                    "think-time-chance": 10,
+                    "min-think-time": 60,
+                    "max-think-time": 120,
+                    "activity-burst-chance": 50,
+                    "min-burst-actions": 2,
+                    "max-burst-actions": 5,
+                    "min-lull-time": 300,
+                    "max-lull-time": 900,
+                    "rpc-switch-delay": 5,
+                    "wallet-switch-delay": 5,
+                    "rpc-urls": [
+                        "https://mainnet.infura.io/v3/YOUR_PROJECT_ID,1",
+                        "https://rpc.goerli.dev,5",
+                        "https://sepolia.infura.io/v3/YOUR_PROJECT_ID,11155111"
+                    ],
+                    "persona-mode": "random"
+                },
+                aggressive: {
+                    "max-txns-per-wallet": 8,
+                    "wallet-idle-chance": 10,
+                    "block-lookback": 100,
+                    "simulated-error-chance": 1,
+                    "enable-time-of-day-bias": false,
+                    "prob-send": 80,
+                    "prob-idle-action": 10,
+                    "prob-balance-check": 10,
+                    "min-amount": 0.0002,
+                    "max-amount": 0.0004,
+                    "min-delay": 5,
+                    "max-delay": 15,
+                    "min-gas-factor": 1.0,
+                    "max-gas-factor": 1.3,
+                    "gas-multiplier": 3,
+                    "max-retries": 1,
+                    "prob-jitter-factor": 2,
+                    "think-time-chance": 2,
+                    "min-think-time": 10,
+                    "max-think-time": 20,
+                    "activity-burst-chance": 80,
+                    "min-burst-actions": 3,
+                    "max-burst-actions": 8,
+                    "min-lull-time": 60,
+                    "max-lull-time": 180,
+                    "rpc-switch-delay": 2,
+                    "wallet-switch-delay": 2,
+                    "rpc-urls": [
+                        "https://rpc.ankr.com/eth,1",
+                        "https://rpc.ankr.com/eth_goerli,5"
+                    ],
+                    "persona-mode": "speedy"
+                },
+                ultraSlow: {
+                    "max-txns-per-wallet": 2,
+                    "wallet-idle-chance": 50,
+                    "block-lookback": 500,
+                    "simulated-error-chance": 5,
+                    "enable-time-of-day-bias": true,
+                    "prob-send": 40,
+                    "prob-idle-action": 40,
+                    "prob-balance-check": 20,
+                    "min-amount": 0.00005,
+                    "max-amount": 0.0001,
+                    "min-delay": 20,
+                    "max-delay": 90,
+                    "min-gas-factor": 0.8,
+                    "max-gas-factor": 1.0,
+                    "gas-multiplier": 1.5,
+                    "max-retries": 3,
+                    "prob-jitter-factor": 8,
+                    "think-time-chance": 25,
+                    "min-think-time": 90,
+                    "max-think-time": 180,
+                    "activity-burst-chance": 20,
+                    "min-burst-actions": 1,
+                    "max-burst-actions": 3,
+                    "min-lull-time": 900,
+                    "max-lull-time": 1800,
+                    "rpc-switch-delay": 8,
+                    "wallet-switch-delay": 8,
+                    "rpc-urls": [
+                        "https://rpc.ankr.com/eth_sepolia,11155111"
+                    ],
+                    "persona-mode": "lazy"
+                }
+            };
+
+            const applyProfile = (profileName, appState) => {
+                const profile = stealthProfiles[profileName];
+                if (!profile) {
+                    log(`Error: Stealth profile '${profileName}' not found.`, 'error', {}, appState);
+                    return;
+                }
+                Object.entries(profile).forEach(([id, value]) => {
+                    setConfigValue(id, value);
+                });
+                loadConfiguration(appState);
+                log(`Applied '${profileName}' stealth profile. Configuration updated.`, 'success', {}, appState);
+            };
+
+            // Function to get persona based on mode
+            function getPersonaByMode(mode) {
+                const basePersona = WalletPersonaManager.getRandomPersona();
+                if (mode === 'speedy') {
+                    return { ...basePersona, behavior: { delayFactor: 0.9, idleChance: 0.05 } };
+                }
+                if (mode === 'lazy') {
+                    return { ...basePersona, behavior: { delayFactor: 1.8, idleChance: 0.4 } };
+                }
+                return basePersona; // 'random' or any other value
+            }
+
+            const loadConfiguration = (appState) => {
+                const probInputs = document.querySelectorAll('.prob-input');
+                let totalProb = 0;
+                probInputs.forEach(input => totalProb += parseInt(input.value) || 0);
+
+                if (totalProb !== 100) {
+                    ui.probSumWarning.classList.remove('hidden');
+                    return false;
+                } else {
+                    ui.probSumWarning.classList.add('hidden');
+                }
+
+                const minAmount = parseFloat(ui.minAmount.value);
+                const maxAmount = parseFloat(ui.maxAmount.value);
+                if (minAmount > maxAmount) {
+                    log('Error: Minimum amount cannot be greater than maximum amount.', 'error', {}, appState);
+                    return false;
+                }
+
+                const minDelay = parseInt(ui.minDelay.value);
+                const maxDelay = parseInt(ui.maxDelay.value);
+                if (minDelay > maxDelay) {
+                    log('Error: Minimum delay cannot be greater than maximum delay.', 'error', {}, appState);
+                    return false;
+                }
+
+                const minGasFactor = parseFloat(ui.minGasFactor.value);
+                const maxGasFactor = parseFloat(ui.maxGasFactor.value);
+                if (minGasFactor > maxGasFactor || minGasFactor <= 0) {
+                    log('Error: Minimum gas factor must be greater than 0 and less than or equal to maximum gas factor.', 'error', {}, appState);
+                    return false;
+                }
+
+                const minThinkTime = parseInt(ui.minThinkTime.value);
+                const maxThinkTime = parseInt(ui.maxThinkTime.value);
+                if (minThinkTime > maxThinkTime) {
+                    log('Error: Minimum Think Time cannot be greater than maximum Think Time.', 'error', {}, appState);
+                    return false;
+                }
+
+                const minBurstActions = parseInt(ui.minBurstActions.value);
+                const maxBurstActions = parseInt(ui.maxBurstActions.value);
+                if (minBurstActions > maxBurstActions) {
+                    log('Error: Minimum Burst Actions cannot be greater than maximum Burst Actions.', 'error', {}, appState);
+                    return false;
+                }
+                const minLullTime = parseInt(ui.minLullTime.value);
+                const maxLullTime = parseInt(ui.maxLullTime.value);
+                if (minLullTime > maxLullTime) {
+                    log('Error: Minimum Lull Time cannot be greater than maximum Lull Time.', 'error', {}, appState);
+                    return false;
+                }
+
+                appState.config = {
+                    maxTxnsPerWallet: parseInt(ui.maxTxnsPerWallet.value) || 3,
+                    walletIdleChance: parseInt(ui.walletIdleChance.value) || 25,
+                    minAmount: minAmount || 0.0001,
+                    maxAmount: maxAmount || 0.0002,
+                    minDelay: minDelay * 1000 || 10000,
+                    maxDelay: maxDelay * 1000 || 30000,
+                    gasMultiplier: parseFloat(ui.gasMultiplier.value) || 2,
+                    minGasFactor: minGasFactor || 0.9,
+                    maxGasFactor: maxGasFactor || 1.1,
+                    blockLookback: parseInt(ui.blockLookback.value) || 100,
+                    probJitterFactor: parseInt(ui.probJitterFactor.value) || 5,
+                    simulatedErrorChance: parseInt(ui.simulatedErrorChance.value) || 0,
+                    thinkTimeChance: parseInt(ui.thinkTimeChance.value) || 10,
+                    minThinkTime: parseInt(ui.minThinkTime.value) * 1000 || 60000,
+                    maxThinkTime: parseInt(ui.maxThinkTime.value) * 1000 || 120000,
+                    activityBurstChance: parseInt(ui.activityBurstChance.value) || 50,
+                    minBurstActions: parseInt(ui.minBurstActions.value) || 2,
+                    maxBurstActions: parseInt(ui.maxBurstActions.value) || 5,
+                    minLullTime: parseInt(ui.minLullTime.value) * 1000 || 300000,
+                    maxLullTime: parseInt(ui.maxLullTime.value) * 1000 || 900000,
+                    enableTimeOfDayBias: ui.enableTimeOfDayBias.checked,
+                    rpcSwitchDelay: parseInt(ui.rpcSwitchDelay.value) * 1000 || 5000,
+                    walletSwitchDelay: parseInt(ui.walletSwitchDelay.value) * 1000 || 5000,
+                    recipientMode: Array.from(ui.recipientMode).find(r => r.checked).value,
+                    fixedAddress: ui.fixedAddress.value.trim(),
+                    probabilities: {
+                        send: parseInt(ui.probSend.value) || 60,
+                        idle: parseInt(ui.probIdleAction.value) || 20,
+                        'balance-check': parseInt(ui.probBalanceCheck.value) || 20,
+                    },
+                    personaMode: ui.personaModeSelector.value || "random"
+                };
+
+                appState.rpcConfigs = new Map();
+                ui.rpcUrls.value.split('\n').forEach(line => {
+                    const [url, chainIdStr] = line.split(',').map(s => s.trim());
+                    const chainId = parseInt(chainIdStr);
+                    if (!url || isNaN(chainId)) {
+                        log(`Warning: Invalid RPC entry ignored: "${line}". Format should be "URL,ChainID".`, 'warning', {}, appState);
+                        return;
+                    }
+                    if (!appState.rpcConfigs.has(chainId)) {
+                        appState.rpcConfigs.set(chainId, []);
+                    }
+                    appState.rpcConfigs.get(chainId).push({ url: url });
+                });
+
+                return true;
+            };
+
+            const chooseAction = (walletSessionProbs) => {
+                const rand = Math.random() * 100;
+                let cumulativeProb = 0;
+
+                if (rand < (cumulativeProb += walletSessionProbs.send)) return 'send';
+                if (rand < (cumulativeProb += walletSessionProbs.idle)) return 'idle-action';
+                if (rand < (cumulativeProb += walletSessionProbs['balance-check'])) return 'balance-check';
+                return 'idle-action'; 
+            };
+
+            const scanRecentBlocks = async (rpcUrl, chainId) => {
+                appState.currentRecipientPool[chainId] = appState.currentRecipientPool[chainId] || [];
+                const provider = new ethers.JsonRpcProvider(rpcUrl);
+                log(`Scanning ${appState.config.blockLookback} blocks on Chain ID ${chainId} using ${rpcUrl}...`, 'info', {}, appState);
+                try {
+                    const currentBlockNumber = await provider.getBlockNumber();
+                    const startBlock = Math.max(0, currentBlockNumber - appState.config.blockLookback);
+                    const newAddresses = new Set();
+
+                    for (let blk = startBlock; blk <= currentBlockNumber; blk++) {
+                        const block = await provider.getBlock(blk, true);
+                        if (block && block.transactions) {
+                            block.transactions.forEach(tx => {
+                                if (tx.to && ethers.isAddress(tx.to)) {
+                                    newAddresses.add(tx.to);
+                                }
+                            });
+                        }
+                    }
+
+                    const existingAddresses = new Set(appState.currentRecipientPool[chainId]);
+                    newAddresses.forEach(addr => existingAddresses.add(addr));
+                    appState.currentRecipientPool[chainId] = Array.from(existingAddresses);
+                    log(`Found ${newAddresses.size} new addresses. Total recipients for chain ${chainId}: ${appState.currentRecipientPool[chainId].length}`, 'success', {}, appState);
+                } catch (error) {
+                    log(`Failed to scan blocks for chain ${chainId} using ${rpcUrl}: ${error.message}`, 'error', {}, appState);
+                }
+            };
+
+            async function callGeminiApi(prompt) {
+                log('Calling Gemini API for explanation...', 'info', {}, appState);
+                openGeminiModal('Getting Explanation...', '<div class="modal-loader"></div><p class="text-center mt-4">Generating explanation...</p>');
+                const apiKey = ui.apiKeyInput.value.trim() || "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }]
+                };
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const explanation = result.candidates[0].content.parts[0].text;
+                        ui.modalTitle.textContent = "Gemini Explanation";
+                        ui.modalContent.innerHTML = `<p>${explanation.replace(/\n/g, '<br>')}</p>`;
+                        return explanation;
+                    } else {
+                        ui.modalTitle.textContent = "Gemini Explanation Error";
+                        ui.modalContent.innerHTML = `<p class="text-red-500">No explanation generated. The model might have been unable to process the request or returned an unexpected format.</p>`;
+                        return "No explanation generated.";
+                    }
+                } catch (error) {
+                    console.error("Gemini API call failed:", error);
+                    ui.modalTitle.textContent = "Gemini API Error";
+                    ui.modalContent.innerHTML = `<p class="text-red-500">Failed to get explanation: ${error.message}. Please check your network connection or try again later.</p>`;
+                    return `Failed to get explanation: ${error.message}.`;
+                }
+            }
+
+            const loadWallets = async (appState) => {
+                const keys = ui.privateKeys.value.split('\n').map(k => k.trim()).filter(Boolean);
+                if (keys.length === 0) {
+                    log('No private keys provided. Please paste private keys into the text area.', 'error', {}, appState);
+                    return;
+                }
+                if (appState.rpcConfigs.size === 0) {
+                    log('Please provide at least one RPC URL and Chain ID in Configuration.', 'error', {}, appState);
+                    return;
+                }
+
+                log(`Attempting to load ${keys.length} wallets and check balances...`, 'info', {}, appState);
+                appState.wallets = [];
+                ui.keysLoadedCount.textContent = `Loading 0 / ${keys.length}...`;
+
+                const firstChainId = appState.rpcConfigs.keys().next().value;
+                if (!firstChainId) {
+                    log('No valid RPC configurations found to load wallets.', 'error', {}, appState);
+                    return;
+                }
+                const firstRpcUrl = appState.rpcConfigs.get(firstChainId)[0].url;
+                const defaultProvider = new ethers.JsonRpcProvider(firstRpcUrl);
+
+                const baseProbs = appState.config.probabilities;
+                const jitterFactor = appState.config.probJitterFactor / 100;
+
+                for (let i = 0; i < keys.length; i++) {
+                    try {
+                        const wallet = new ethers.Wallet(keys[i], defaultProvider);
+                        const balanceWei = await defaultProvider.getBalance(wallet.address);
+                        const balanceEth = ethers.formatEther(balanceWei);
+
+                        const persona = getPersonaByMode(appState.config.personaMode);
+
+                        let sendJitter = Stealth.getRandomInRange(-jitterFactor, jitterFactor) * baseProbs.send;
+                        let idleJitter = Stealth.getRandomInRange(-jitterFactor, jitterFactor) * baseProbs.idle;
+                        let balanceCheckJitter = Stealth.getRandomInRange(-jitterFactor, jitterFactor) * baseProbs['balance-check'];
+
+                        let currentSend = Math.max(0, baseProbs.send + sendJitter);
+                        let currentIdle = Math.max(0, baseProbs.idle + idleJitter);
+                        let currentBalanceCheck = Math.max(0, baseProbs['balance-check'] + balanceCheckJitter);
+
+                        const sum = currentSend + currentIdle + currentBalanceCheck;
+                        const walletSessionProbs = {
+                            send: (currentSend / sum) * 100,
+                            idle: (currentIdle / sum) * 100,
+                            'balance-check': (currentBalanceCheck / sum) * 100
+                        };
+
+                        appState.wallets.push({
+                            privateKey: keys[i],
+                            address: wallet.address,
+                            balance: parseFloat(balanceEth).toFixed(6),
+                            sessionProbabilities: walletSessionProbs,
+                            persona: persona
+                        });
+                        log(`🧍 Assigned persona: ${persona.name} | delay ×${persona.behavior.delayFactor.toFixed(2)} | idle ${Math.round(persona.behavior.idleChance * 100)}%`, 'info', { personaName: persona.name, userAgent: persona.userAgent }, appState);
+                        ui.keysLoadedCount.textContent = `Loaded ${i + 1} / ${keys.length}...`;
+                    } catch (error) {
+                        log(`Failed to load key #${i+1}: Invalid key or RPC issue - ${error.message}`, 'error', {}, appState);
+                    }
+                }
+
+                log(`Successfully loaded ${appState.wallets.length} wallets and their balances.`, 'success', {}, appState);
+                ui.keysLoadedCount.textContent = `Loaded ${appState.wallets.length} wallets.`;
+                updateWalletBalanceChart(appState);
+            };
+
+            const testRpcConnections = async (appState) => {
+                loadConfiguration(appState);
+                if (appState.rpcConfigs.size === 0) {
+                    log('No RPC URLs configured to test.', 'warning', {}, appState);
+                    return;
+                }
+
+                log('Testing RPC connections...', 'info', {}, appState);
+                for (const [chainId, rpcUrlsForChain] of appState.rpcConfigs.entries()) {
+                    log(`Testing RPCs for Chain ID ${chainId}:`, 'info', {}, appState);
+                    for (const rpcEntry of rpcUrlsForChain) {
+                        const provider = new ethers.JsonRpcProvider(rpcEntry.url);
+                        try {
+                            const network = await provider.getNetwork();
+                            const blockNumber = await provider.getBlockNumber();
+                            if (network.chainId === BigInt(chainId)) {
+                                log(`✅ RPC ${rpcEntry.url} connected (Chain ID: ${network.chainId}, Latest Block: ${blockNumber})`, 'success', { chainId }, appState);
+                            } else {
+                                log(`⚠️ RPC ${rpcEntry.url} connected but Chain ID mismatch. Configured: ${chainId}, Actual: ${network.chainId}. Latest Block: ${blockNumber}.`, 'warning', { chainId }, appState);
+                            }
+                        }
+                        catch (error) {
+                            log(`❌ Failed to connect to RPC ${rpcEntry.url}: ${error.message}`, 'error', { chainId }, appState);
+                        }
+                    }
+                }
+                log('RPC connection testing complete.', 'info', {}, appState);
+            };
+
+            const loadAddressesFromList = (appState) => {
+                const addressesInput = ui.listAddresses.value.split('\n').map(addr => addr.trim()).filter(Boolean);
+                const validAddresses = [];
+                let invalidCount = 0;
+
+                addressesInput.forEach(addr => {
+                    if (ethers.isAddress(addr)) {
+                        validAddresses.push(addr);
+                    } else {
+                        invalidCount++;
+                        log(`Invalid address in list: "${addr}"`, 'warning', {}, appState);
+                    }
+                });
+
+                appState.manualRecipientList = validAddresses;
+                ui.listAddressesCount.textContent = `Loaded ${validAddresses.length} valid addresses. ${invalidCount > 0 ? `(${invalidCount} invalid ignored)` : ''}`;
+                if (validAddresses.length > 0) {
+                    log(`Successfully loaded ${validAddresses.length} recipient addresses from list.`, 'success', {}, appState);
+                } else {
+                    log('No valid addresses loaded from list.', 'warning', {}, appState);
+                }
+            };
+
+            const loadPredefinedListFromFile = (appState) => {
+                const file = ui.predefinedFileInput.files[0];
+                if (!file) {
+                    log('No file selected for predefined list.', 'warning', {}, appState);
+                    ui.predefinedAddressesInfo.textContent = 'No file loaded.';
+                    ui.predefinedAddressesCount.textContent = '';
+                    appState.predefinedRecipientList = [];
+                    updatePredefinedAddressesDisplay(appState);
+                    return;
+                }
+
+                ui.predefinedAddressesInfo.textContent = `Loading file: ${file.name}...`;
+                log(`Attempting to load predefined addresses from ${file.name}...`, 'info', {}, appState);
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const content = e.target.result;
+                    const addresses = content.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+                    const validAddresses = [];
+                    let invalidCount = 0;
+
+                    addresses.forEach(addr => {
+                        if (ethers.isAddress(addr)) {
+                            validAddresses.push(addr);
+                        } else {
+                            invalidCount++;
+                            log(`Invalid address in predefined file: "${addr}"`, 'warning', {}, appState);
+                        }
+                    });
+
+                    appState.predefinedRecipientList = validAddresses;
+                    ui.predefinedAddressesInfo.textContent = `File loaded: ${file.name}`;
+                    ui.predefinedAddressesCount.textContent = `List contains ${validAddresses.length} valid addresses. ${invalidCount > 0 ? `(${invalidCount} invalid ignored)` : ''}`;
+                    if (validAddresses.length > 0) {
+                        log(`Successfully loaded ${validAddresses.length} addresses from "${file.name}".`, 'success', {}, appState);
+                    } else {
+                        log(`No valid addresses found in "${file.name}".`, 'warning', {}, appState);
+                    }
+                    updatePredefinedAddressesDisplay(appState);
+                };
+
+                reader.onerror = (e) => {
+                    log(`Error reading file: ${e.target.error.name}`, 'error', {}, appState);
+                    ui.predefinedAddressesInfo.textContent = 'Error loading file.';
+                    ui.predefinedAddressesCount.textContent = '';
+                    appState.predefinedRecipientList = [];
+                    updatePredefinedAddressesDisplay(appState);
+                };
+
+                reader.readAsText(file);
+            };
+
+            const updatePredefinedAddressesDisplay = (appState) => {
+                ui.predefinedAddressesDisplay.innerHTML = '';
+                if (appState.predefinedRecipientList.length > 0) {
+                    appState.predefinedRecipientList.forEach(addr => {
+                        const li = document.createElement('li');
+                        li.textContent = addr;
+                        ui.predefinedAddressesDisplay.appendChild(li);
+                    });
+                } else {
+                    ui.predefinedAddressesDisplay.innerHTML = '<li>No predefined addresses loaded.</li>';
+                }
+            };
+            
+            async function sendWithRetryOrSkip(wallet, txParams, chainId, gasFactorUsed, appState) {
+                try {
+                    const populatedTx = await wallet.populateTransaction(txParams);
+                    console.log("🧾 Final TX being sent:", populatedTx);
+                    log(`🚀 Sending TX with populated fields`, 'info', {}, appState);
+
+                    const txResponse = await wallet.sendTransaction(populatedTx);
+
+                    log(`✅ Tx sent! Hash: <a href="https://etherscan.io/tx/${txResponse.hash}" target="_blank" class="underline">${txResponse.hash}</a><button class="log-copy-btn" data-tx-hash="${txResponse.hash}">📋</button>`, 'success', {
+                        chainId,
+                        walletAddress: wallet.address,
+                        action: 'send',
+                        gasFactorUsed: gasFactorUsed.toFixed(2)
+                    }, appState);
+
+                    const receipt = await txResponse.wait();
+                    log(`✅ Tx confirmed!`, 'success', {}, appState);
+                    return { success: true, receipt };
+
+                } catch (err) {
+                    console.warn("❌ TX Send Failed:", err);
+                    log(`❌ TX Failed: ${err.message}`, 'error', {
+                        chainId,
+                        walletAddress: wallet.address,
+                        action: 'send'
+                    }, appState);
+
+                    updateActionDistChart('skipped', appState);
+                    return { success: false, receipt: null };
+                }
+            }
+
+            async function maybeDummyCall(provider, appState) {
+                if (Math.random() < 0.1) {
+                    log("Doing dummy blockNumber check…", 'info', {}, appState);
+                    try {
+                        await provider.getBlockNumber();
+                        log("Dummy blockNumber check successful.", 'info', {}, appState);
+                    } catch (e) {
+                        log(`Dummy blockNumber check failed: ${e.message}`, 'warning', {}, appState);
+                    }
+                }
+                if (Math.random() < 0.1) {
+                    log("Doing dummy gas price check…", 'info', {}, appState);
+                    try {
+                        await provider.getGasPrice();
+                        log("Dummy gas price check successful.", 'info', {}, appState);
+                    } catch (e) {
+                        log(`Dummy gas price check failed: ${e.message}`, 'warning', {}, appState);
+                    }
+                }
+                if (Math.random() < 0.05 && appState.wallets.length > 0) {
+                    const randomWallet = appState.wallets[Math.floor(Math.random() * appState.wallets.length)];
+                    log(`Doing dummy balance check for ...${randomWallet.address.slice(-6)}...`, 'info', {}, appState);
+                    try {
+                        const bal = await provider.getBalance(randomWallet.address);
+                        log(`Dummy balance check successful: ${ethers.formatEther(bal).slice(0,8)} ETH`, 'info', {}, appState);
+                    } catch (e) {
+                        log(`Dummy balance check failed: ${e.message}`, 'warning', {}, appState);
+                    }
+                }
+            }
+
+
+            const startInteraction = async (appState) => {
+                openConfirmationModal('Are you sure you want to start Blockchain Interaction? Ensure your settings and keys are for test purposes only, as this involves real blockchain interactions.', async (confirmed) => {
+                    if (!confirmed) {
+                        log('Interaction start cancelled by user.', 'info', {}, appState);
+                        return;
+                    }
+
+                    if (!loadConfiguration(appState)) {
+                        log('Configuration is invalid. Please fix errors before starting.', 'error', {}, appState);
+                        return;
+                    }
+
+                    if (appState.wallets.length === 0) {
+                        log('Please load wallets first.', 'error', {}, appState);
+                        return;
+                    }
+                    if (appState.rpcConfigs.size === 0) {
+                        log('Please provide at least one RPC URL and Chain ID.', 'error', {}, appState);
+                        return;
+                    }
+                    if (appState.config.recipientMode === 'fixed' && !ethers.isAddress(appState.config.fixedAddress)) {
+                        log('Invalid fixed recipient address.', 'error', {}, appState);
+                        return;
+                    }
+                    if (appState.config.recipientMode === 'list' && appState.manualRecipientList.length === 0) {
+                        log('Recipient list is empty. Please load addresses into the list or choose another recipient mode.', 'error', {}, appState);
+                        return;
+                    }
+                    if (appState.config.recipientMode === 'predefined' && appState.predefinedRecipientList.length === 0) {
+                        log('Predefined recipient list is empty. Please load a CSV file with addresses.', 'error', {}, appState);
+                        return;
+                    }
+                    if (appState.config.recipientMode === 'self-interact' && appState.wallets.length < 2) {
+                        log('To use "interact with each other" mode, you need at least 2 loaded wallets.', 'error', {}, appState);
+                        return;
+                    }
+                    
+                    appState.isRunning = true;
+                    appState.stopFlag = false;
+                    appState.stats = { totalActions: 0, successfulActions: 0, failedActions: 0, actionCounts: { send: 0, idle: 0, 'balance-check': 0, skipped: 0 } };
+                    appState.logEntries = [];
+                    initConsoleCharts(appState); // Re-initialize charts to clear previous data
+                    updateActionDistChart('send', appState); // Trigger initial chart update
+
+
+                    ui.startBtn.disabled = true;
+                    ui.stopBtn.disabled = false;
+                    ui.statusDisplay.textContent = 'Running';
+                    ui.successCount.textContent = appState.stats.successfulActions.toString();
+                    ui.failCount.textContent = appState.stats.failedActions.toString();
+                    ui.progressText.textContent = '0';
+                    ui.progressBar.style.width = `100%`;
+
+
+                    log(`Starting Blockchain Interaction process across ${appState.rpcConfigs.size} chains and ${appState.wallets.length} wallets.`, 'info', {}, appState);
+
+                    if (appState.config.recipientMode === 'pool') {
+                        log('Pre-scanning all configured chains for recipient addresses for the dynamic pool...', 'info', {}, appState);
+                        for (const [chainId, rpcUrlsForChain] of appState.rpcConfigs.entries()) {
+                            let rpcToScan = rpcUrlsForChain[0].url;
+                            let scanProvider = new ethers.JsonRpcProvider(rpcToScan);
+                            try {
+                                await scanProvider.getBlockNumber();
+                            } catch (error) {
+                                log(`Initial RPC ${rpcToScan} for Chain ID ${chainId} failed for scanning: ${error.message}. Trying alternatives for scan.`, 'warning', { chainId }, appState);
+                                for (let i = 1; i < rpcUrlsForChain.length; i++) {
+                                    rpcToScan = rpcUrlsForChain[i].url;
+                                    scanProvider = new ethers.JsonRpcProvider(rpcToScan);
+                                    try {
+                                        await scanProvider.getBlockNumber();
+                                        log(`Successfully switched to ${rpcToScan} for scanning Chain ID ${chainId}.`, 'info', { chainId }, appState);
+                                        break;
+                                    } catch (altError) {
+                                        log(`Alternative RPC ${rpcToScan} for Chain ID ${chainId} also failed for scanning: ${altError.message}.`, 'warning', { chainId }, appState);
+                                    }
+                                }
+                            }
+                            await scanRecentBlocks(rpcToScan, chainId);
+                        }
+                        log('Pre-scanning complete.', 'info', {}, appState);
+                    }
+
+                    while (appState.isRunning && !appState.stopFlag) {
+                        if (appState.rpcConfigs.size === 0) {
+                            log('❌ No RPC endpoints configured. Stopping interaction.', 'error', {}, appState);
+                            appState.stopFlag = true;
+                            break;
+                        }
+
+                        const availableChainIds = Array.from(appState.rpcConfigs.keys());
+                        if (availableChainIds.length === 0) {
+                            log('❌ No active chains with RPCs. Stopping interaction.', 'error', {}, appState);
+                            appState.stopFlag = true;
+                            break;
+                        }
+
+                        const selectedChainId = availableChainIds[Math.floor(Math.random() * availableChainIds.length)];
+                        const rpcUrlsForChain = appState.rpcConfigs.get(selectedChainId);
+
+                        let provider = null;
+                        let currentRpcUrl = null;
+                        let rpcFound = false;
+
+                        for (const rpcEntry of rpcUrlsForChain) {
+                            const tempProvider = new ethers.JsonRpcProvider(rpcEntry.url);
+                            try {
+                                await tempProvider.getBlockNumber();
+                                provider = tempProvider;
+                                currentRpcUrl = rpcEntry.url;
+                                rpcFound = true;
+                                log(`✅ Using RPC: ${currentRpcUrl} for Chain ID ${selectedChainId}`, 'info', { chainId: selectedChainId }, appState);
+                                break;
+                            } catch (rpcError) {
+                                log(`❌ RPC ${rpcEntry.url} for Chain ID ${selectedChainId} failed health check: ${rpcError.message}. Trying next.`, 'warning', { chainId: selectedChainId }, appState);
+                            }
+                        }
+
+                        if (!rpcFound) {
+                            log(`❌ All RPCs for Chain ID ${selectedChainId} failed. Skipping this chain for now.`, 'error', { chainId: selectedChainId }, appState);
+                            await sleep(appState.config.rpcSwitchDelay);
+                            continue;
+                        }
+
+                        if (appState.rpcConfigs.size > 1 && appState.config.rpcSwitchDelay > 0) {
+                            log(`Pausing for RPC switch delay (${appState.config.rpcSwitchDelay / 1000}s)...`, 'info', {}, appState);
+                            await sleep(appState.config.rpcSwitchDelay);
+                        }
+
+                        const walletInfoIndex = Math.floor(Math.random() * appState.wallets.length);
+                        const walletInfo = appState.wallets[walletInfoIndex];
+                        const walletAddress = walletInfo.address;
+                        let wallet = new ethers.Wallet(walletInfo.privateKey, provider);
+
+                        log(`🌐 Initiating session for Wallet ...${walletAddress.slice(-6)} on Chain ID ${selectedChainId} (${currentRpcUrl}). Persona: ${walletInfo.persona.name}`, 'info', { personaName: walletInfo.persona.name, userAgent: walletInfo.persona.userAgent }, appState);
+
+                        if (appState.wallets.length > 1 && appState.config.walletSwitchDelay > 0) {
+                            log(`Pausing for wallet switch delay (${appState.config.walletSwitchDelay / 1000}s)...`, 'info', {}, appState);
+                            await sleep(appState.config.walletSwitchDelay);
+                        }
+
+                        if (Math.random() * 100 < walletInfo.persona.behavior.idleChance * 100) {
+                            log(`Wallet ...${walletAddress.slice(-6)} is idling for this session on Chain ID ${selectedChainId} (Persona Idle).`, 'info', { chainId: selectedChainId, walletAddress, action: 'idle' }, appState);
+                            updateActionDistChart('idle', appState);
+                            const delay = Stealth.generateLogNormalDelay(appState.config.minDelay, appState.config.maxDelay, walletInfo.persona.behavior.delayFactor);
+                            await sleep(delay);
+                            continue;
+                        }
+
+                        try {
+                            const balanceWei = await wallet.provider.getBalance(walletAddress);
+                            if (balanceWei < ethers.parseEther("0.001")) {
+                                log(`Skipping wallet ...${walletAddress.slice(-6)} on Chain ID ${selectedChainId} due to critically low balance (${ethers.formatEther(balanceWei)} ETH).`, 'warning', { chainId: selectedChainId, walletAddress, action: 'skipped' }, appState);
+                                updateActionDistChart('skipped', appState);
+                                const delay = Stealth.generateLogNormalDelay(appState.config.minDelay, appState.config.maxDelay, walletInfo.persona.behavior.delayFactor);
+                                await sleep(delay);
+                                continue;
+                            } else if (balanceWei < ethers.parseEther("0.005")) {
+                                 log(`Wallet ...${walletAddress.slice(-6)} on Chain ID ${selectedChainId} has low balance (${ethers.formatEther(balanceWei)} ETH).`, 'warning', { chainId: selectedChainId, walletAddress, action: 'info' }, appState);
+                            }
+                        } catch (balanceError) {
+                            log(`Failed to check balance for ...${walletAddress.slice(-6)} on Chain ID ${selectedChainId}: ${balanceError.message}. Skipping session.`, 'error', { chainId: selectedChainId, walletAddress, action: 'skipped' }, appState);
+                            updateActionDistChart('skipped', appState);
+                            const delay = Stealth.generateLogNormalDelay(appState.config.minDelay, appState.config.maxDelay, walletInfo.persona.behavior.delayFactor);
+                            await sleep(delay);
+                            continue;
+                        }
+
+                        let actionsForWallet;
+                        let currentSessionType = 'normal';
+                        if (Math.random() * 100 < appState.config.activityBurstChance) {
+                            actionsForWallet = Math.floor(Stealth.getRandomInRange(appState.config.minBurstActions, appState.config.maxBurstActions + 1));
+                            currentSessionType = 'burst';
+                            log(`Wallet ...${walletAddress.slice(-6)} entered an activity burst, performing ${actionsForWallet} actions.`, 'info', {}, appState);
+                        } else {
+                            actionsForWallet = Math.floor(Stealth.getRandomInRange(1, appState.config.maxTxnsPerWallet + 1));
+                        }
+                        log(`Wallet ...${walletAddress.slice(-6)} will perform ${actionsForWallet} action(s) on Chain ID ${selectedChainId}.`, 'info', {}, appState);
+
+
+                        for (let i = 1; i <= actionsForWallet; i++) {
+                            if (appState.stopFlag) break;
+
+                            appState.stats.totalActions++;
+                            ui.progressText.textContent = `${appState.stats.totalActions}`;
+                            ui.progressBar.style.width = `100%`;
+
+                            let currentGasPrice = null;
+                            let maxPriorityFeePerGas = null;
+                            let maxFeePerGas = null;
+
+                            try {
+                                const feeData = await wallet.provider.getFeeData();
+                                currentGasPrice = feeData.gasPrice;
+                                maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
+                                maxFeePerGas = feeData.maxFeePerGas;
+
+                                ui.gasDisplay.textContent = `${(Number(ethers.formatUnits(currentGasPrice || maxFeePerGas, 'gwei'))).toFixed(2)} gwei`;
+
+                                const thresholdGasPrice = currentGasPrice ? (currentGasPrice * BigInt(Math.round(appState.config.gasMultiplier * 100))) / BigInt(100) : null;
+                                const thresholdMaxFeePerGas = maxFeePerGas ? (maxFeePerGas * BigInt(Math.round(appState.config.gasMultiplier * 100))) / BigInt(100) : null;
+
+                                if ((currentGasPrice && thresholdGasPrice && currentGasPrice > thresholdGasPrice) ||
+                                    (maxFeePerGas && thresholdMaxFeePerGas && maxFeePerGas > thresholdMaxFeePerGas)) {
+                                    log(`Gas price (${(Number(ethers.formatUnits(currentGasPrice || maxFeePerGas, 'gwei'))).toFixed(2)} gwei) is too high. Skipping action for ...${walletAddress.slice(-6)} on Chain ID ${selectedChainId}.`, 'warning', { chainId: selectedChainId, walletAddress, action: 'skipped' }, appState);
+                                    updateActionDistChart('skipped', appState);
+                                    break;
+                                }
+                            } catch (gasError) {
+                                log(`Failed to get gas price for Chain ID ${selectedChainId}: ${gasError.message}. Proceeding without high gas check.`, 'warning', { chainId: selectedChainId, walletAddress, action: 'skipped' }, appState);
+                            }
+                            
+                            await maybeDummyCall(wallet.provider, appState);
+                            if (appState.stopFlag) break;
+
+                            const chosenBehavior = chooseAction(walletInfo.sessionProbabilities);
+                            log(`[Action ${i}/${actionsForWallet}] Wallet ...${walletAddress.slice(-6)} chose to: ${chosenBehavior.toUpperCase()}`, 'info', { chainId: selectedChainId, walletAddress, action: chosenBehavior }, appState);
+
+                            let actionSuccess = false;
+                            let delayUsed = 0;
+
+                            switch (chosenBehavior) {
+                                case "send":
+                                    let recipientAddress;
+                                    const currentChainRecipientPool = appState.currentRecipientPool[selectedChainId];
+                                    
+                                    if (appState.config.recipientMode === 'fixed') {
+                                        recipientAddress = ui.fixedAddress.value.trim();
+                                        if (!ethers.isAddress(recipientAddress)) {
+                                            log(`Fixed recipient address "${recipientAddress}" is invalid. Skipping send.`, 'error', { chainId: selectedChainId, walletAddress, action: 'send' }, appState);
+                                            updateActionDistChart('skipped', appState);
+                                            break;
+                                        }
+                                    } else if (appState.config.recipientMode === 'list') {
+                                        if (appState.manualRecipientList.length === 0) {
+                                            log(`Recipient list is empty. Skipping send for wallet ...${walletAddress.slice(-6)}.`, 'warning', { chainId: selectedChainId, walletAddress, action: 'send' }, appState);
+                                            updateActionDistChart('skipped', appState);
+                                            break;
+                                        }
+                                        recipientAddress = appState.manualRecipientList[Math.floor(Math.random() * appState.manualRecipientList.length)];
+                                    }
+                                    else if (appState.config.recipientMode === 'predefined') {
+                                        if (appState.predefinedRecipientList.length === 0) {
+                                            log(`Predefined recipient list is empty. Skipping send for wallet ...${walletAddress.slice(-6)}.`, 'warning', { chainId: selectedChainId, walletAddress, action: 'send' }, appState);
+                                            updateActionDistChart('skipped', appState);
+                                            break;
+                                        }
+                                        recipientAddress = appState.predefinedRecipientList[Math.floor(Math.random() * appState.predefinedRecipientList.length)];
+                                    }
+                                    else if (appState.config.recipientMode === 'self-interact') {
+                                        const otherWallets = appState.wallets.filter(w => w.address.toLowerCase() !== walletAddress.toLowerCase());
+                                        if (otherWallets.length === 0) {
+                                            log(`No other loaded wallets to interact with. Skipping send for wallet ...${walletAddress.slice(-6)}.`, 'warning', { chainId: selectedChainId, walletAddress, action: 'send' }, appState);
+                                            updateActionDistChart('skipped', appState);
+                                            break;
+                                        }
+                                        recipientAddress = otherWallets[Math.floor(Math.random() * otherWallets.length)].address;
+                                        log(`Sending to another loaded wallet: ${recipientAddress.slice(0,6)}...${recipientAddress.slice(-4)}`, 'info', {}, appState);
+                                    }
+                                    else if (appState.config.recipientMode === 'pool') {
+                                        if (currentChainRecipientPool && currentChainRecipientPool.length > 0) {
+                                            recipientAddress = currentChainRecipientPool[Math.floor(Math.random() * currentChainRecipientPool.length)];
+                                        } else {
+                                            const otherWallets = appState.wallets.filter(w => w.address.toLowerCase() !== walletAddress.toLowerCase());
+                                            if (otherWallets.length > 0) {
+                                                recipientAddress = otherWallets[Math.floor(Math.random() * otherWallets.length)].address;
+                                                log(`Dynamic pool empty for Chain ID ${selectedChainId}. Falling back to sending to another loaded wallet: ${recipientAddress.slice(0,6)}...${recipientAddress.slice(-4)}`, 'info', {}, appState);
+                                            } else {
+                                                log(`Dynamic pool empty and no other loaded wallets to interact with. Skipping send for wallet ...${walletAddress.slice(-6)}.`, 'warning', { chainId: selectedChainId, walletAddress, action: 'send' }, appState);
+                                                updateActionDistChart('skipped', appState);
+                                                break;
+                                            }
+                                        }
+                                    } else {
+                                        log(`No valid recipient selection for 'send' action. Skipping.`, 'warning', { chainId: selectedChainId, walletAddress, action: 'send' }, appState);
+                                        updateActionDistChart('skipped', appState);
+                                        break;
+                                    }
+
+                                    const amount = Stealth.getRandomInRange(appState.config.minAmount, appState.config.maxAmount);
+                                    const tx = {
+                                        to: recipientAddress,
+                                        value: ethers.parseEther(amount.toFixed(12))
+                                    };
+
+                                    const randomGasFactor = Stealth.getRandomInRange(appState.config.minGasFactor, appState.config.maxGasFactor);
+                                    if (maxFeePerGas && maxPriorityFeePerGas) {
+                                        tx.maxFeePerGas = (maxFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
+                                        tx.maxPriorityFeePerGas = (maxPriorityFeePerGas * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
+                                        if (tx.maxFeePerGas < tx.maxPriorityFeePerGas) {
+                                            tx.maxFeePerGas = tx.maxPriorityFeePerGas + ethers.parseUnits('1', 'gwei');
+                                        }
+                                    } else if (currentGasPrice) {
+                                        tx.gasPrice = (currentGasPrice * BigInt(Math.round(randomGasFactor * 100))) / BigInt(100);
+                                    }
+                                    log(`Attempting to send with random gas factor: x${randomGasFactor.toFixed(2)}`, 'info', {}, appState);
+
+                                    if (Math.random() * 100 < appState.config.simulatedErrorChance) {
+                                        log(`⚠️ Simulated network error (pre-send). Transaction will be skipped.`, 'warning', { chainId: selectedChainId, walletAddress }, appState);
+                                        actionSuccess = false;
+                                        updateActionDistChart('skipped', appState);
+                                        break;
+                                    }
+                                    const sendResult = await sendWithRetryOrSkip(wallet, tx, selectedChainId, randomGasFactor, appState);
+                                    actionSuccess = sendResult.success;
+                                    
+                                    if (actionSuccess) {
+                                        appState.stats.actionCounts.send++;
+                                        log(`✅ Transaction sent successfully to ${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)} with ${amount} ETH.`, 'success', {
+                                            chainId: selectedChainId,
+                                            walletAddress,
+                                            action: 'send',
+                                            gasFactorUsed: randomGasFactor.toFixed(2),
+                                            personaName: walletInfo.persona.name,
+                                            userAgent: walletInfo.persona.userAgent
+                                        }, appState);
+                                        updateActionDistChart('send', appState);
+                                    } else {
+                                        log(`❌ Transaction failed.`, 'error', { chainId: selectedChainId, walletAddress, action: 'send', personaName: walletInfo.persona.name, userAgent: walletInfo.persona.userAgent }, appState);
+                                        updateActionDistChart('skipped', appState);
+                                    }
+                                    break;
+
+                                case "idle-action":
+                                    log(`Wallet ...${walletAddress.slice(-6)} is idling for this action.`, 'info', { chainId: selectedChainId, walletAddress, action: 'idle', personaName: walletInfo.persona.name, userAgent: walletInfo.persona.userAgent }, appState);
+                                    updateActionDistChart('idle', appState);
+                                    actionSuccess = true;
+                                    break;
+
+                                case "balance-check":
+                                    try {
+                                        const currentBalanceWei = await wallet.provider.getBalance(walletAddress);
+                                        log(`Wallet ...${walletAddress.slice(-6)} checked balance: ${ethers.formatEther(currentBalanceWei).slice(0, 8)} ETH`, 'info', { chainId: selectedChainId, walletAddress, action: 'balance-check', personaName: walletInfo.persona.name, userAgent: walletInfo.persona.userAgent }, appState);
+                                        actionSuccess = true;
+                                    } catch (error) {
+                                        log(`Failed to check balance for ...${walletAddress.slice(-6)}: ${error.message}`, 'error', { chainId: selectedChainId, walletAddress, action: 'balance-check', personaName: walletInfo.persona.name, userAgent: walletInfo.persona.userAgent }, appState);
+                                    }
+                                    updateActionDistChart('balance-check', appState);
+                                    break;
+                            }
+
+                            if (actionSuccess) {
+                                appState.stats.successfulActions++;
+                            } else {
+                                if (chosenBehavior === 'send') {
+                                    const lastLog = appState.logEntries[appState.logEntries.length - 1];
+                                    if (!lastLog.Details.includes('skipped after max retries')) {
+                                        appState.stats.failedActions++;
+                                    }
+                                } else {
+                                     appState.stats.failedActions++;
+                                }
+                            }
+                            ui.successCount.textContent = appState.stats.successfulActions.toString();
+                            ui.failCount.textContent = appState.stats.failedActions.toString();
+                            if(chosenBehavior !== 'send') updateActionDistChart(chosenBehavior, appState);
+
+                            try {
+                                const newBalanceWei = await wallet.provider.getBalance(wallet.address);
+                                walletInfo.balance = parseFloat(ethers.formatEther(newBalanceWei)).toFixed(6);
+                                updateWalletBalanceChart(appState);
+                            } catch (balanceUpdateError) {
+                                log(`Failed to update balance for ...${walletInfo.address.slice(-6)}: ${balanceUpdateError.message}`, 'warning', {}, appState);
+                            }
+
+                            if (i < actionsForWallet && !appState.stopFlag) {
+                                let currentMinDelay = appState.config.minDelay;
+                                let currentMaxDelay = appState.config.maxDelay;
+
+                                if (appState.config.enableTimeOfDayBias) {
+                                    const currentHour = new Date().getHours();
+                                    if (currentHour >= 1 && currentHour < 6) {
+                                        currentMinDelay *= (2 + walletInfo.persona.behavior.idleChance);
+                                        currentMaxDelay *= (2 + walletInfo.persona.behavior.idleChance);
+                                        log(`Applying time-of-day bias: increased delay due to night hours and persona.`, 'info', {}, appState);
+                                    }
+                                }
+
+                                if (Math.random() * 100 < appState.config.thinkTimeChance) {
+                                    delayUsed = Stealth.generateLogNormalDelay(appState.config.minThinkTime, appState.config.maxThinkTime, walletInfo.persona.behavior.delayFactor);
+                                    log(`Waiting for a human-like "think time" burst of ${Math.round(delayUsed/1000)} seconds...`, 'info', {}, appState);
+                                    appState.lastHumanLikeSpike = new Date().toLocaleTimeString();
+                                    ui.humanSpikeDisplay.textContent = appState.lastHumanLikeSpike;
+                                    await sleep(delayUsed);
+                                } else {
+                                    delayUsed = Stealth.generateLogNormalDelay(currentMinDelay, currentMaxDelay, walletInfo.persona.behavior.delayFactor);
+                                    log(`Waiting for ${Math.round(delayUsed/1000)} seconds before next action...`, 'info', { delayUsedMs: delayUsed }, appState);
+                                    await sleep(delayUsed);
+                                }
+                            }
+                        }
+
+                        if (appState.stopFlag) break;
+
+                        if (currentSessionType === 'burst' && appState.config.minLullTime > 0) {
+                            const lullDelay = Stealth.generateLogNormalDelay(appState.config.minLullTime, appState.config.maxLullTime, walletInfo.persona.behavior.delayFactor);
+                            log(`Activity burst completed. Entering lull period for ${Math.round(lullDelay/1000)} seconds...`, 'info', {}, appState);
+                            appState.lastHumanLikeSpike = new Date().toLocaleTimeString();
+                            ui.humanSpikeDisplay.textContent = appState.lastHumanLikeSpike;
+                            await sleep(lullDelay);
+                        } else {
+                            const sessionDelay = Stealth.generateLogNormalDelay(appState.config.minDelay, appState.config.maxDelay, walletInfo.persona.behavior.delayFactor);
+                            log(`Session for Wallet ...${walletAddress.slice(-6)} on Chain ID ${selectedChainId} completed. Waiting for ${Math.round(sessionDelay/1000)} seconds before next session...`, 'info', { delayUsedMs: sessionDelay }, appState);
+                            await sleep(sessionDelay);
+                        }
+
+                        if (Math.random() < 0.05) {
+                            ui.themeToggle.click();
+                            await sleep(500);
+                            ui.themeToggle.click();
+                            log('Performed a random theme toggle for UI interaction.', 'info', {}, appState);
+                        }
+                    }
+
+                    log('Interaction process finished.', 'success', {}, appState);
+                    stopInteraction(appState);
+                });
+            };
+
+            const stopInteraction = (appState) => {
+                appState.isRunning = false;
+                appState.stopFlag = true;
+                ui.startBtn.disabled = true;
+                ui.stopBtn.disabled = true;
+                ui.statusDisplay.textContent = 'Idle';
+            };
+
+            const clearAllData = (appState) => {
+                openConfirmationModal('Are you sure you want to clear ALL configurations, loaded wallets, and log data? This action cannot be undone.', (confirmed) => {
+                    if (confirmed) {
+                        appState.isRunning = false;
+                        appState.stopFlag = false;
+                        appState.wallets = [];
+                        appState.rpcConfigs = new Map();
+                        appState.currentRecipientPool = {};
+                        appState.manualRecipientList = [];
+                        ui.listAddresses.value = '';
+                        ui.listAddressesCount.textContent = '';
+                        appState.predefinedRecipientList = [];
+                        ui.predefinedFileInput.value = '';
+                        ui.predefinedAddressesInfo.textContent = 'No file loaded.';
+                        updatePredefinedAddressesDisplay(appState);
+                        appState.config = {};
+                        appState.stats = { totalActions: 0, successfulActions: 0, failedActions: 0, actionCounts: { send: 0, idle: 0, 'balance-check': 0, skipped: 0 } };
+                        appState.logEntries = [];
+                        appState.lastHumanLikeSpike = null;
+                        ui.humanSpikeDisplay.textContent = 'Never';
+
+                        ui.privateKeys.value = '';
+                        injectStealthDefaults();
+                        ui.stealthProfileSelector.value = "balanced";
+                        ui.personaModeSelector.value = "random";
+
+                        setUIEnabled(false, appState);
+                        initConsoleCharts(appState);
+                        updateWalletBalanceChart(appState);
+                    }
+                }, appState);
+            };
+
+            const handleExplainSendTx = async (appState) => {
+                const minAmount = ui.minAmount.value;
+                const maxAmount = ui.maxAmount.value;
+                const recipientMode = Array.from(ui.recipientMode).find(r => r.checked).value;
+                const fixedAddress = ui.fixedAddress.value.trim();
+                const listAddressCount = appState.manualRecipientList.length;
+                const predefinedAddressCount = appState.predefinedRecipientList.length;
+                const loadedWalletCount = appState.wallets.length;
+
+
+                let recipientDescription = '';
+                if (recipientMode === 'fixed' && fixedAddress) {
+                    recipientDescription = `a fixed address (${fixedAddress.substring(0, 6)}...)`;
+                } else if (recipientMode === 'list' && listAddressCount > 0) {
+                    recipientDescription = `a random address from a custom list of ${listAddressCount} addresses`;
+                } else if (recipientMode === 'predefined' && predefinedAddressCount > 0) {
+                    recipientDescription = `a random address from a predefined list of ${predefinedAddressCount} addresses`;
+                } else if (recipientMode === 'self-interact' && loadedWalletCount > 1) {
+                    recipientDescription = `a random address from the other ${loadedWalletCount - 1} loaded wallets (excluding the sender)`;
+                }
+                else {
+                    recipientDescription = 'a random address from a dynamically scanned pool (with fallback to loaded wallets if no external addresses are found)';
+                }
+
+                const prompt = `I am setting up a script to send Ethereum. The amount will be between ${minAmount} and ${maxAmount} ETH. The recipient will be ${recipientDescription}. Explain the typical purpose of such transactions in a blockchain context and any general risks a user should be aware of.`;
+                await callGeminiApi(prompt);
+            };
+
+            const handleSummarizeLog = async (appState) => {
+                if (appState.logEntries.length === 0) {
+                    openGeminiModal('No Log Data', '<p class="text-accent">There are no log entries to summarize yet. Start Interaction to generate logs!</p>');
+                    return;
+                }
+
+                const recentLogEntries = appState.logEntries.slice(-100);
+                const formattedLog = recentLogEntries.map(entry => {
+                    return `${entry.Timestamp} [${entry.Status}] ${entry.Action} - ${entry.Details}`;
+                }).join('\n');
+
+                const prompt = `Please summarize the following blockchain transaction log. Identify key events, common patterns (e.g., successful transactions, repeated errors), and any notable observations. If there are errors, categorize them if possible.
+                --- Log Data ---
+                ${formattedLog}
+                --- End Log Data ---
+                Provide a concise summary and any insights you can derive.`;
+
+                await callGeminiApi(prompt);
+            };
+
+
+            const downloadLogCsv = (appState) => {
+                if (appState.logEntries.length === 0) {
+                    openGeminiModal('No Data', '<p class="text-accent">No log data to download.</p>');
+                    return;
+                }
+
+                const headers = Object.keys(appState.logEntries[0]).join(',');
+                const rows = appState.logEntries.map(entry =>
+                    Object.values(entry).map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')
+                );
+
+                const csvContent = headers + '\n' + rows.join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `tx_log_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                log('Log downloaded as CSV.', 'info', {}, appState);
+            };
+
+            const downloadLogJson = (appState) => {
+                if (appState.logEntries.length === 0) {
+                    openGeminiModal('No Data', '<p class="text-accent">No log data to download.</p>');
+                    return;
+                }
+
+                const jsonContent = JSON.stringify(appState.logEntries, null, 2);
+                const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `tx_log_${new Date().toISOString().slice(0,10)}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                log('Log downloaded as JSON.', 'info', {}, appState);
+            };
+
+            const clearLog = (appState) => {
+                openConfirmationModal('Are you sure you want to clear the live log? This will remove all displayed and stored log entries.', (confirmed) => {
+                    if (confirmed) {
+                        ui.liveLog.innerHTML = '';
+                        appState.logEntries = [];
+                        log('Live log cleared.', 'info', {}, appState);
+                    }
+                }, appState);
+            };
+
+            const connectWallet = async () => {
+                if (typeof window.ethereum === 'undefined') {
+                    log('MetaMask or compatible wallet not detected. Please install one.', 'error', {}, appState);
+                    ui.walletStatusDisplay.innerHTML = `No wallet detected. Please install <a href="https://metamask.io/" target="_blank" class="underline text-blue-500">MetaMask</a> or a compatible browser extension.`;
+                    setUIEnabled(false, appState);
+                    return;
+                }
+
+                log('window.ethereum detected. Requesting accounts...', 'info', {}, appState);
+                ui.walletStatusDisplay.innerHTML = 'Connecting... (Check your wallet extension for a pop-up)';
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+                    if (accounts.length === 0) {
+                        log('No accounts found. Please connect your wallet and select an account.', 'error', {}, appState);
+                        appState.connectedAddress = null;
+                        ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
+                        setUIEnabled(false, appState);
+                        return;
+                    }
+                    appState.connectedAddress = accounts[0];
+                    log(`Wallet connected: ${appState.connectedAddress}`, 'success', {}, appState);
+                    ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
+                    setUIEnabled(true, appState);
+
+                    window.ethereum.on('accountsChanged', (newAccounts) => {
+                        log('Wallet accounts changed event detected.', 'info', {}, appState);
+                        if (newAccounts.length === 0) {
+                            log('Wallet disconnected or no accounts selected.', 'warning', {}, appState);
+                            appState.connectedAddress = null;
+                            ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
+                            setUIEnabled(false, appState);
+                        } else if (appState.connectedAddress && newAccounts[0].toLowerCase() !== appState.connectedAddress.toLowerCase()) {
+                            log(`Account changed to: ${newAccounts[0]}`, 'info', {}, appState);
+                            appState.connectedAddress = newAccounts[0];
+                            ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
+                            setUIEnabled(true, appState);
+                        } else if (!appState.connectedAddress) {
+                            log(`Wallet reconnected with account: ${newAccounts[0]}`, 'info', {}, appState);
+                            appState.connectedAddress = newAccounts[0];
+                            ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
+                            setUIEnabled(true, appState);
+                        }
+                    });
+
+                    window.ethereum.on('chainChanged', (chainId) => {
+                        log(`Network changed to Chain ID: ${parseInt(chainId, 16)}. Please ensure your RPC configurations match this network.`, 'warning', {}, appState);
+                    });
+
+                    window.ethereum.on('disconnect', (error) => {
+                        log(`Wallet disconnected: ${error.message || 'Unknown error'}`, 'error', {}, appState);
+                        appState.connectedAddress = null;
+                        ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
+                        setUIEnabled(false, appState);
+                    });
+
+                } catch (error) {
+                    log(`Wallet connection failed: ${error.message}`, 'error', {}, appState);
+                    appState.connectedAddress = null;
+                    ui.walletStatusDisplay.innerHTML = `Connection failed.`;
+                    setUIEnabled(false, appState);
+                }
+            };
+
+            // Handlers object to pass to uiManager's setupEventListeners
+            const eventHandlers = {
+                connectWallet: connectWallet,
+                startInteraction: startInteraction,
+                stopInteraction: stopInteraction,
+                clearAllData: clearAllData,
+                loadWallets: loadWallets,
+                testRpcConnections: testRpcConnections,
+                downloadLogCsv: downloadLogCsv,
+                downloadLogJson: downloadLogJson,
+                clearLog: clearLog,
+                handleSummarizeLog: handleSummarizeLog,
+                handleExplainSendTx: handleExplainSendTx,
+                loadConfiguration: loadConfiguration,
+                loadAddressesFromList: loadAddressesFromList,
+                loadPredefinedListFromFile: loadPredefinedListFromFile,
+                applyProfile: applyProfile,
+                getPersonaByMode: getPersonaByMode,
+            };
+
+            initConsoleCharts(appState);
+            setupEventListeners(appState, eventHandlers); // Pass appState and handlers to setupEventListeners
+            setUIEnabled(false, appState);
+
+            const initialActiveToggle = document.getElementById('advance-console-toggle');
+            initialActiveToggle.classList.add('active');
+            initialActiveToggle.nextElementSibling.classList.add('open');
+
+
+            if (typeof window.ethereum !== 'undefined') {
+                 log('MetaMask or compatible wallet detected on startup. Checking for existing connection...', 'info', {}, appState);
+                 window.ethereum.request({ method: 'eth_accounts' })
+                    .then(accounts => {
+                        if (accounts.length > 0) {
+                            appState.connectedAddress = accounts[0];
+                            log(`Existing wallet connection found: ${appState.connectedAddress}`, 'info', {}, appState);
+                            ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
+                            setUIEnabled(true, appState);
+                        } else {
+                             ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
+                             log('No existing wallet connection found on startup.', 'info', {}, appState);
+                             setUIEnabled(false, appState);
+                        }
+                    })
+                    .catch(error => {
+                        log(`Error checking existing wallet connection: ${error.message}`, 'error', {}, appState);
+                         ui.walletStatusDisplay.innerHTML = `Error: ${error.message}`;
+                         setUIEnabled(false, appState);
+                    });
+
+                 window.ethereum.on('accountsChanged', (newAccounts) => {
+                     log('Wallet accounts changed event detected (startup listener).', 'info', {}, appState);
+                     if (newAccounts.length === 0) {
+                         log('Wallet disconnected or no accounts selected (startup listener).', 'warning', {}, appState);
+                         appState.connectedAddress = null;
+                         ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
+                         setUIEnabled(false, appState);
+                     } else {
+                         log(`Account changed to: ${newAccounts[0]} (startup listener)`, 'info', {}, appState);
+                         appState.connectedAddress = newAccounts[0];
+                         ui.walletStatusDisplay.innerHTML = `Connected: <strong>${appState.connectedAddress.slice(0, 6)}...${appState.connectedAddress.slice(-4)}</strong>`;
+                         setUIEnabled(true, appState);
+                     }
+                 });
+
+                 window.ethereum.on('chainChanged', (chainId) => {
+                     log(`Network changed to Chain ID: ${parseInt(chainId, 16)} (startup listener). Please ensure RPCs match.`, 'warning', {}, appState);
+                 });
+
+                 window.ethereum.on('disconnect', (error) => {
+                    log(`Wallet disconnected: ${error.message || 'Unknown error'} (startup listener)`, 'error', {}, appState);
+                    appState.connectedAddress = null;
+                    ui.walletStatusDisplay.innerHTML = `No wallet connected.`;
+                    setUIEnabled(false, appState);
+                });
+
+            } else {
+                ui.walletStatusDisplay.innerHTML = `No wallet detected. Please install <a href="https://metamask.io/" target="_blank" class="underline text-blue-500">MetaMask</a>.`;
+                log('MetaMask or compatible wallet not detected on startup.', 'error', {}, appState);
+                setUIEnabled(false, appState);
+            }
+
+            log('Console initialized. Please connect your wallet to begin.', 'info', {}, appState);
+
+            // --- NEW FOOTER FUNCTIONALITY ---
+            const donationAddressStr = '0x1C46ccEA4D62d3eEC4DCE3501aa96d0Ff5FcA954';
+            const copyBtn = document.getElementById('copy-address-btn');
+            const copyIcon = document.getElementById('copy-icon');
+            const checkIcon = document.getElementById('check-icon');
+            checkIcon.classList.add('hidden');
+            const showQrBtn = document.getElementById('show-qr-btn');
+            const qrModal = document.getElementById('qr-code-modal');
+            const closeQrModalBtn = qrModal.querySelector('.close-qr-button');
+            const qrCodeContainer = document.getElementById('qr-code-container');
+            const qrAddressDisplay = document.getElementById('qr-address-display');
+
+            if(typeof QRCode !== 'undefined') {
+                new QRCode(qrCodeContainer, {
+                    text: donationAddressStr,
+                    width: 200,
+                    height: 200,
+                    colorDark : "#2d3748",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+                qrAddressDisplay.textContent = donationAddressStr;
+            } else {
+                console.error("QRCode library is not loaded.")
+                qrCodeContainer.innerHTML = "QR Code library failed to load. Please check your connection.";
+            }
+
+            copyBtn.addEventListener('click', () => {
+                copyToClipboard(donationAddressStr, appState); // Pass appState here
+                copyIcon.classList.add('hidden');
+                checkIcon.classList.remove('hidden');
+                setTimeout(() => {
+                    copyIcon.classList.remove('hidden');
+                    checkIcon.classList.add('hidden');
+                }, 2000);
+            });
+
+            showQrBtn.addEventListener('click', () => {
+                qrModal.classList.remove('hidden');
+            });
+
+            const closeQrModal = () => {
+                qrModal.classList.add('hidden');
+            }
+            closeQrModalBtn.addEventListener('click', closeQrModal);
+            window.addEventListener('click', (event) => {
+                if (event.target === qrModal) {
+                    closeQrModal();
+                }
+            });
+        });
+    </script>
 </body>
 </html>
